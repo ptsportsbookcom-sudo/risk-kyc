@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ReviewStatus,
   useKycCases,
@@ -32,6 +33,7 @@ function restrictionClass(restriction: string) {
 }
 
 export default function ReviewPage() {
+  const router = useRouter();
   const { cases, updateCaseStatus } = useKycCases();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
@@ -158,7 +160,11 @@ export default function ReviewPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/70">
+                <tr
+                  key={row.id}
+                  className="cursor-pointer hover:bg-slate-50/70"
+                  onClick={() => router.push(`/review/${row.id}`)}
+                >
                   <td className="px-4 py-3 text-sm font-medium text-slate-800">
                     {row.userId}
                   </td>
@@ -202,7 +208,10 @@ export default function ReviewPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => updateCaseStatus(row.id, "Approved")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          updateCaseStatus(row.id, "Approved");
+                        }}
                         className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
                         aria-label={`Approve ${row.username}`}
                       >
@@ -210,7 +219,10 @@ export default function ReviewPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateCaseStatus(row.id, "Rejected")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          updateCaseStatus(row.id, "Rejected");
+                        }}
                         className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
                         aria-label={`Reject ${row.username}`}
                       >
