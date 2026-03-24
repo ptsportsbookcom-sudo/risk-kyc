@@ -1,90 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-
-type VerificationType = "ID" | "Selfie" | "Proof";
-type ReviewStatus = "Pending" | "Approved" | "Rejected";
-
-type KycRow = {
-  userId: string;
-  username: string;
-  verificationType: VerificationType;
-  status: ReviewStatus;
-  uploadedDate: string;
-};
-
-const mockRows: KycRow[] = [
-  {
-    userId: "USR-1001",
-    username: "alex_turner",
-    verificationType: "ID",
-    status: "Pending",
-    uploadedDate: "2026-03-24",
-  },
-  {
-    userId: "USR-1002",
-    username: "maya_chen",
-    verificationType: "Selfie",
-    status: "Approved",
-    uploadedDate: "2026-03-23",
-  },
-  {
-    userId: "USR-1003",
-    username: "john_k",
-    verificationType: "Proof",
-    status: "Rejected",
-    uploadedDate: "2026-03-23",
-  },
-  {
-    userId: "USR-1004",
-    username: "sofia_lane",
-    verificationType: "ID",
-    status: "Pending",
-    uploadedDate: "2026-03-22",
-  },
-  {
-    userId: "USR-1005",
-    username: "omar_n",
-    verificationType: "Selfie",
-    status: "Pending",
-    uploadedDate: "2026-03-22",
-  },
-  {
-    userId: "USR-1006",
-    username: "liam_rivera",
-    verificationType: "Proof",
-    status: "Approved",
-    uploadedDate: "2026-03-21",
-  },
-  {
-    userId: "USR-1007",
-    username: "nina_b",
-    verificationType: "ID",
-    status: "Rejected",
-    uploadedDate: "2026-03-21",
-  },
-  {
-    userId: "USR-1008",
-    username: "dario_v",
-    verificationType: "Selfie",
-    status: "Pending",
-    uploadedDate: "2026-03-20",
-  },
-  {
-    userId: "USR-1009",
-    username: "emma_stone",
-    verificationType: "Proof",
-    status: "Approved",
-    uploadedDate: "2026-03-20",
-  },
-  {
-    userId: "USR-1010",
-    username: "ryan_mills",
-    verificationType: "ID",
-    status: "Pending",
-    uploadedDate: "2026-03-19",
-  },
-];
+import {
+  ReviewStatus,
+  useKycCases,
+  VerificationType,
+} from "@/app/components/kyc-cases-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -99,21 +20,15 @@ function statusClass(status: ReviewStatus) {
 }
 
 export default function ReviewPage() {
-  const [rows, setRows] = useState<KycRow[]>(mockRows);
+  const { cases, updateCaseStatus } = useKycCases();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
     "All" | VerificationType
   >("All");
   const [usernameQuery, setUsernameQuery] = useState("");
 
-  const updateRowStatus = (userId: string, status: ReviewStatus) => {
-    setRows((currentRows) =>
-      currentRows.map((row) => (row.userId === userId ? { ...row, status } : row))
-    );
-  };
-
   const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
+    return cases.filter((row) => {
       const matchesStatus =
         statusFilter === "All" ? true : row.status === statusFilter;
       const matchesVerification =
@@ -126,7 +41,7 @@ export default function ReviewPage() {
 
       return matchesStatus && matchesVerification && matchesUsername;
     });
-  }, [rows, statusFilter, verificationFilter, usernameQuery]);
+  }, [cases, statusFilter, verificationFilter, usernameQuery]);
 
   return (
     <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -179,6 +94,7 @@ export default function ReviewPage() {
             <option value="ID">ID</option>
             <option value="Selfie">Selfie</option>
             <option value="Proof">Proof</option>
+            <option value="Full KYC">Full KYC</option>
           </select>
         </div>
 
@@ -218,7 +134,7 @@ export default function ReviewPage() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Uploaded Date
+                  Created Date
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Actions
@@ -227,7 +143,7 @@ export default function ReviewPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRows.map((row) => (
-                <tr key={row.userId} className="hover:bg-slate-50/70">
+                <tr key={row.id} className="hover:bg-slate-50/70">
                   <td className="px-4 py-3 text-sm font-medium text-slate-800">
                     {row.userId}
                   </td>
@@ -247,13 +163,13 @@ export default function ReviewPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.uploadedDate}
+                    {row.createdDate}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => updateRowStatus(row.userId, "Approved")}
+                        onClick={() => updateCaseStatus(row.id, "Approved")}
                         className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
                         aria-label={`Approve ${row.username}`}
                       >
@@ -261,7 +177,7 @@ export default function ReviewPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateRowStatus(row.userId, "Rejected")}
+                        onClick={() => updateCaseStatus(row.id, "Rejected")}
                         className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
                         aria-label={`Reject ${row.username}`}
                       >
@@ -275,9 +191,16 @@ export default function ReviewPage() {
           </table>
         </div>
 
-        {filteredRows.length === 0 ? (
+        {cases.length === 0 ? (
+          <div className="border-t border-slate-200 px-4 py-10 text-center">
+            <p className="text-sm font-medium text-slate-700">No KYC cases yet</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Run a simulation to create the first pending case.
+            </p>
+          </div>
+        ) : filteredRows.length === 0 ? (
           <div className="border-t border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-            No users match the selected filters.
+            No cases match the selected filters.
           </div>
         ) : null}
       </div>

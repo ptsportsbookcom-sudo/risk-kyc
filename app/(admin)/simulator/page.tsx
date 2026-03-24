@@ -1,6 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import {
+  useKycCases,
+  VerificationType,
+} from "@/app/components/kyc-cases-context";
 
 type EventType =
   | "Registration"
@@ -8,7 +12,6 @@ type EventType =
   | "Withdrawal"
   | "Bonus Activation"
   | "Bet Placed";
-type VerificationType = "ID" | "Selfie" | "Proof" | "Full KYC";
 type RiskFlag = "Multi Account" | "Suspicious Device" | "Bonus Abuse";
 
 type SimulationResult = {
@@ -32,6 +35,7 @@ const initialResult: SimulationResult = {
 };
 
 export default function SimulatorPage() {
+  const { addCase } = useKycCases();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
@@ -57,22 +61,19 @@ export default function SimulatorPage() {
     const hasSuspiciousDevice = selectedRiskFlags.includes("Suspicious Device");
 
     let triggeredAction = "No risk rules triggered";
-    let createdCaseStatus = "No case created";
+    const createdCaseStatus = "Case Created (Pending)";
     let appliedRestriction = "None";
     let verificationRequired: SimulationResult["verificationRequired"] = "None";
 
     if (eventType === "Withdrawal" && parsedAmount > 1000) {
       triggeredAction = "High-value withdrawal review";
-      createdCaseStatus = "Case Created";
       appliedRestriction = "Withdrawal Block";
       verificationRequired = "Full KYC";
     } else if (eventType === "Deposit" && parsedAmount > 500) {
       triggeredAction = "High-value deposit review";
-      createdCaseStatus = "Case Created";
       verificationRequired = "ID";
     } else if (eventType === "Bonus Activation" && hasBonusAbuse) {
       triggeredAction = "Bonus abuse risk review";
-      createdCaseStatus = "Case Created";
       verificationRequired = "Full KYC";
     }
 
@@ -81,12 +82,22 @@ export default function SimulatorPage() {
         triggeredAction === "No risk rules triggered"
           ? "Suspicious device pattern detected"
           : `${triggeredAction} + suspicious device pattern`;
-      createdCaseStatus = "Case Created";
       appliedRestriction =
         appliedRestriction === "None"
           ? "Device Restriction"
           : `${appliedRestriction} + Device Restriction`;
     }
+
+    const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
+    const normalizedUsername = username.trim() || "simulated_user";
+    const caseVerificationType =
+      verificationRequired === "None" ? verificationType : verificationRequired;
+
+    addCase({
+      userId: normalizedUserId,
+      username: normalizedUsername,
+      verificationType: caseVerificationType,
+    });
 
     setResult({
       triggeredAction,
