@@ -1,31 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import {
-  useKycCases,
-  VerificationType,
-} from "@/app/components/kyc-cases-context";
-
-type EventType =
-  | "Registration"
-  | "Deposit"
-  | "Withdrawal"
-  | "Bonus Activation"
-  | "Bet Placed";
-type RiskFlag = "Multi Account" | "Suspicious Device" | "Bonus Abuse";
+import { useKycCases } from "@/app/components/kyc-cases-context";
+import { EventType, Rule, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
   triggeredAction: string;
   createdCaseStatus: string;
   appliedRestriction: string;
-  verificationRequired: VerificationType | "None";
+  verificationRequired: string;
 };
-
-const riskFlags: RiskFlag[] = [
-  "Multi Account",
-  "Suspicious Device",
-  "Bonus Abuse",
-];
 
 const initialResult: SimulationResult = {
   triggeredAction: "No action triggered yet",
@@ -35,79 +19,96 @@ const initialResult: SimulationResult = {
 };
 
 export default function SimulatorPage() {
+  const { rules } = useRules();
   const { addCase } = useKycCases();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
-  const [verificationType, setVerificationType] =
-    useState<VerificationType>("ID");
+  const [country, setCountry] = useState("United States");
+  const [state, setState] = useState("California");
   const [amount, setAmount] = useState("");
-  const [selectedRiskFlags, setSelectedRiskFlags] = useState<RiskFlag[]>([]);
+  const [count, setCount] = useState("");
   const [result, setResult] = useState<SimulationResult>(initialResult);
 
-  const toggleRiskFlag = (flag: RiskFlag) => {
-    setSelectedRiskFlags((currentFlags) =>
-      currentFlags.includes(flag)
-        ? currentFlags.filter((currentFlag) => currentFlag !== flag)
-        : [...currentFlags, flag]
-    );
+  const isRuleMatched = (
+    rule: Rule,
+    simulation: { eventType: EventType; amount: number; count: number }
+  ) => {
+    if (rule.eventType !== simulation.eventType) {
+      return false;
+    }
+
+    if (rule.conditionType === "Country/State") {
+      return rule.conditionValue === `${country} / ${state}`;
+    }
+
+    const numericValue = Number(rule.conditionValue);
+    if (Number.isNaN(numericValue)) {
+      return false;
+    }
+
+    if (
+      rule.conditionType === "Single deposit" ||
+      rule.conditionType === "Single withdrawal"
+    ) {
+      return simulation.amount >= numericValue;
+    }
+
+    return simulation.count >= numericValue;
   };
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const parsedAmount = Number(amount || 0);
-    const hasBonusAbuse = selectedRiskFlags.includes("Bonus Abuse");
-    const hasSuspiciousDevice = selectedRiskFlags.includes("Suspicious Device");
-    const restrictions: string[] = [];
+    const simulation = {
+      eventType,
+      amount: Number(amount || 0),
+      count: Number(count || 0),
+    };
 
-    let triggeredAction = "No risk rules triggered";
-    const createdCaseStatus = "Case Created (Pending)";
-    let verificationRequired: SimulationResult["verificationRequired"] = "None";
-
-    if (eventType === "Withdrawal" && parsedAmount > 1000) {
-      triggeredAction = "High-value withdrawal review";
-      restrictions.push("Withdrawal Block");
-      verificationRequired = "Full KYC";
-    } else if (eventType === "Deposit" && parsedAmount > 500) {
-      triggeredAction = "High-value deposit review";
-      restrictions.push("Monitoring Flag");
-      verificationRequired = "ID";
-    } else if (eventType === "Bonus Activation" && hasBonusAbuse) {
-      triggeredAction = "Bonus abuse risk review";
-      verificationRequired = "Full KYC";
-    }
-
-    if (hasBonusAbuse) {
-      restrictions.push("Casino Block");
-    }
-
-    if (hasSuspiciousDevice) {
-      triggeredAction =
-        triggeredAction === "No risk rules triggered"
-          ? "Suspicious device pattern detected"
-          : `${triggeredAction} + suspicious device pattern`;
-      restrictions.push("Full Account Block");
-    }
+    const matchedRules = rules.filter((rule) => isRuleMatched(rule, simulation));
 
     const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
     const normalizedUsername = username.trim() || "simulated_user";
-    const caseVerificationType =
-      verificationRequired === "None" ? verificationType : verificationRequired;
 
-    addCase({
-      userId: normalizedUserId,
-      username: normalizedUsername,
-      verificationType: caseVerificationType,
-      restrictions,
+    if (matchedRules.length === 0) {
+      setResult({
+        triggeredAction: "No rule triggered",
+        createdCaseStatus: "No case created",
+        appliedRestriction: "None",
+        verificationRequired: "None",
+      });
+      return;
+    }
+
+    matchedRules.forEach((rule) => {
+      addCase({
+        userId: normalizedUserId,
+        username: normalizedUsername,
+        verificationRequired: rule.verificationRequired,
+        restrictions: rule.restrictions,
+      });
     });
 
     setResult({
-      triggeredAction,
-      createdCaseStatus,
-      appliedRestriction:
-        restrictions.length > 0 ? restrictions.join(", ") : "None",
-      verificationRequired,
+      triggeredAction: `${matchedRules.length} rule(s) triggered`,
+      createdCaseStatus: `${matchedRules.length} case(s) created (Pending)`,
+      appliedRestriction: (() => {
+        const uniqueRestrictions = Array.from(
+          new Set(matchedRules.flatMap((rule) => rule.restrictions))
+        );
+        return uniqueRestrictions.length > 0
+          ? uniqueRestrictions.join(", ")
+          : "None";
+      })(),
+      verificationRequired: (() => {
+        const uniqueVerifications = Array.from(
+          new Set(matchedRules.flatMap((rule) => rule.verificationRequired))
+        );
+        return uniqueVerifications.length > 0
+          ? uniqueVerifications.join(", ")
+          : "None";
+      })(),
     });
   };
 
@@ -170,30 +171,8 @@ export default function SimulatorPage() {
                 <option value="Registration">Registration</option>
                 <option value="Deposit">Deposit</option>
                 <option value="Withdrawal">Withdrawal</option>
-                <option value="Bonus Activation">Bonus Activation</option>
-                <option value="Bet Placed">Bet Placed</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label
-                htmlFor="verificationType"
-                className="text-sm font-medium text-slate-700"
-              >
-                Verification Type
-              </label>
-              <select
-                id="verificationType"
-                value={verificationType}
-                onChange={(event) =>
-                  setVerificationType(event.target.value as VerificationType)
-                }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-              >
-                <option value="ID">ID</option>
-                <option value="Selfie">Selfie</option>
-                <option value="Proof">Proof</option>
-                <option value="Full KYC">Full KYC</option>
+                <option value="Bonus">Bonus</option>
+                <option value="Bet">Bet</option>
               </select>
             </div>
 
@@ -214,25 +193,40 @@ export default function SimulatorPage() {
             </div>
           </div>
 
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-slate-700">Risk Flag</legend>
-            <div className="flex flex-wrap gap-3">
-              {riskFlags.map((flag) => (
-                <label
-                  key={flag}
-                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedRiskFlags.includes(flag)}
-                    onChange={() => toggleRiskFlag(flag)}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                  />
-                  {flag}
-                </label>
-              ))}
+          {eventType === "Registration" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">Country</label>
+                <input
+                  type="text"
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">State</label>
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(event) => setState(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                />
+              </div>
             </div>
-          </fieldset>
+          ) : (
+            <div className="max-w-sm space-y-1">
+              <label className="text-sm font-medium text-slate-700">Count</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={count}
+                onChange={(event) => setCount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+          )}
 
           <div>
             <button

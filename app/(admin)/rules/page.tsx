@@ -1,33 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-
-type EventType = "Registration" | "Deposit" | "Withdrawal" | "Bonus" | "Bet";
-type VerificationType = "ID" | "Selfie" | "Proof" | "Full KYC";
-type RestrictionType =
-  | "Withdrawal Block"
-  | "Deposit Block"
-  | "Casino Block"
-  | "Full Account Block";
-type ConditionType =
-  | "Country/State"
-  | "Single deposit"
-  | "Number of deposits"
-  | "Lifetime deposit"
-  | "Single withdrawal"
-  | "Number of withdrawals"
-  | "Lifetime withdrawal"
-  | "Number of bonuses used"
-  | "Bet count";
-
-type Rule = {
-  id: string;
-  eventType: EventType;
-  conditionType: ConditionType;
-  conditionValue: string;
-  verificationRequired: VerificationType[];
-  restrictions: RestrictionType[];
-};
+import { VerificationType } from "@/app/components/kyc-cases-context";
+import {
+  ConditionType,
+  EventType,
+  RestrictionType,
+  useRules,
+} from "@/app/components/rules-context";
 
 const verificationOptions: VerificationType[] = [
   "ID",
@@ -68,6 +48,7 @@ function getDefaultConditionType(eventType: EventType): ConditionType {
 }
 
 export default function RulesPage() {
+  const { rules, addRule } = useRules();
   const [eventType, setEventType] = useState<EventType>("Registration");
   const [country, setCountry] = useState(countryOptions[0]);
   const [state, setState] = useState(stateOptions[0]);
@@ -79,7 +60,6 @@ export default function RulesPage() {
     VerificationType[]
   >([]);
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
-  const [rules, setRules] = useState<Rule[]>([]);
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
@@ -109,16 +89,13 @@ export default function RulesPage() {
     const resolvedConditionValue =
       eventType === "Registration" ? `${country} / ${state}` : conditionValue;
 
-    const createdRule: Rule = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    addRule({
       eventType,
       conditionType,
       conditionValue: resolvedConditionValue || "N/A",
       verificationRequired,
       restrictions,
-    };
-
-    setRules((currentRules) => [createdRule, ...currentRules]);
+    });
     setConditionValue("");
     setVerificationRequired([]);
     setRestrictions([]);

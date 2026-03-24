@@ -46,7 +46,7 @@ export default function ReviewPage() {
       const matchesVerification =
         verificationFilter === "All"
           ? true
-          : row.verificationType === verificationFilter;
+          : row.verificationRequired.includes(verificationFilter);
       const matchesUsername = row.username
         .toLowerCase()
         .includes(usernameQuery.toLowerCase().trim());
@@ -166,7 +166,7 @@ export default function ReviewPage() {
                     {row.username}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.verificationType}
+                    {row.verificationRequired.join(", ")}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span

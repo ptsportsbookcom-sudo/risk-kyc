@@ -9,7 +9,7 @@ export type KycCase = {
   id: string;
   userId: string;
   username: string;
-  verificationType: VerificationType;
+  verificationRequired: VerificationType[];
   status: ReviewStatus;
   createdDate: string;
   restrictions: string[];
@@ -18,7 +18,7 @@ export type KycCase = {
 type CreateKycCaseInput = {
   userId: string;
   username: string;
-  verificationType: VerificationType;
+  verificationRequired: VerificationType[];
   restrictions: string[];
 };
 
@@ -42,7 +42,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
         userId: input.userId,
         username: input.username,
-        verificationType: input.verificationType,
+        verificationRequired: input.verificationRequired,
         status: "Pending",
         createdDate,
         restrictions: input.restrictions,
