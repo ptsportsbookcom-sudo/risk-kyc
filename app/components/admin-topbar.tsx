@@ -7,6 +7,7 @@ const pageTitles: Record<string, string> = {
   "/review": "Review",
   "/reports": "Reports",
   "/simulator": "Simulator",
+  "/rules": "Rules",
 };
 
 export function AdminTopbar() {

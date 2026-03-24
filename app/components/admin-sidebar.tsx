@@ -8,6 +8,7 @@ const navItems = [
   { label: "Review", href: "/review" },
   { label: "Reports", href: "/reports" },
   { label: "Simulator", href: "/simulator" },
+  { label: "Rules", href: "/rules" },
 ];
 
 export function AdminSidebar() {
