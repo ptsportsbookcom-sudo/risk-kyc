@@ -11,6 +11,13 @@ import {
 
 export type VerificationType = "ID" | "Selfie" | "Proof" | "Full KYC";
 export type ReviewStatus = "Pending" | "Approved" | "Rejected";
+export type DocumentType = "ID" | "Selfie" | "Proof";
+
+export type KycDocument = {
+  type: DocumentType;
+  status: ReviewStatus;
+  file: string;
+};
 
 export type KycCase = {
   id: string;
@@ -20,6 +27,7 @@ export type KycCase = {
   status: ReviewStatus;
   createdDate: string;
   restrictions: string[];
+  documents: KycDocument[];
 };
 
 type CreateKycCaseInput = {
@@ -33,10 +41,50 @@ type KycCasesContextValue = {
   cases: KycCase[];
   addCase: (input: CreateKycCaseInput) => void;
   updateCaseStatus: (caseId: string, status: ReviewStatus) => void;
+  uploadDocument: (caseId: string, type: DocumentType, file?: string) => void;
+  updateDocumentStatus: (
+    caseId: string,
+    type: DocumentType,
+    status: ReviewStatus
+  ) => void;
 };
 
 const KycCasesContext = createContext<KycCasesContextValue | undefined>(undefined);
 const KYC_CASES_STORAGE_KEY = "kyc_cases";
+const ALL_DOCUMENT_TYPES: DocumentType[] = ["ID", "Selfie", "Proof"];
+
+function getRequiredDocumentTypes(verificationRequired: VerificationType[]) {
+  if (verificationRequired.includes("Full KYC")) {
+    return ALL_DOCUMENT_TYPES;
+  }
+
+  return verificationRequired.filter(
+    (item): item is DocumentType => item === "ID" || item === "Selfie" || item === "Proof"
+  );
+}
+
+function deriveCaseStatus(caseData: KycCase): ReviewStatus {
+  const requiredTypes = getRequiredDocumentTypes(caseData.verificationRequired);
+
+  if (requiredTypes.length === 0) {
+    return caseData.status;
+  }
+
+  const requiredDocs = requiredTypes.map((type) =>
+    caseData.documents.find((doc) => doc.type === type)
+  );
+
+  if (requiredDocs.some((doc) => doc?.status === "Rejected")) {
+    return "Rejected";
+  }
+
+  const allApproved = requiredDocs.every((doc) => doc?.status === "Approved");
+  if (allApproved) {
+    return "Approved";
+  }
+
+  return "Pending";
+}
 
 export function KycCasesProvider({ children }: { children: ReactNode }) {
   const [cases, setCases] = useState<KycCase[]>([]);
@@ -52,7 +100,13 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
       }
 
       const parsedCases = JSON.parse(savedCases) as KycCase[];
-      setCases(Array.isArray(parsedCases) ? parsedCases : []);
+      const normalizedCases = Array.isArray(parsedCases)
+        ? parsedCases.map((kycCase) => ({
+            ...kycCase,
+            documents: Array.isArray(kycCase.documents) ? kycCase.documents : [],
+          }))
+        : [];
+      setCases(normalizedCases);
     } catch {
       setCases([]);
     } finally {
@@ -81,6 +135,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         status: "Pending",
         createdDate,
         restrictions: input.restrictions,
+        documents: [],
       },
       ...currentCases,
     ]);
@@ -94,8 +149,65 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const uploadDocument = (caseId: string, type: DocumentType, file?: string) => {
+    setCases((currentCases) =>
+      currentCases.map((kycCase) => {
+        if (kycCase.id !== caseId) {
+          return kycCase;
+        }
+
+        const existingDocument = kycCase.documents.find((doc) => doc.type === type);
+        const uploadedDocument: KycDocument = {
+          type,
+          status: "Pending",
+          file: file ?? `mock://${caseId}/${type.toLowerCase()}`,
+        };
+
+        const documents = existingDocument
+          ? kycCase.documents.map((doc) => (doc.type === type ? uploadedDocument : doc))
+          : [...kycCase.documents, uploadedDocument];
+
+        return {
+          ...kycCase,
+          documents,
+          status: deriveCaseStatus({ ...kycCase, documents }),
+        };
+      })
+    );
+  };
+
+  const updateDocumentStatus = (
+    caseId: string,
+    type: DocumentType,
+    status: ReviewStatus
+  ) => {
+    setCases((currentCases) =>
+      currentCases.map((kycCase) => {
+        if (kycCase.id !== caseId) {
+          return kycCase;
+        }
+
+        const documents = kycCase.documents.map((doc) =>
+          doc.type === type ? { ...doc, status } : doc
+        );
+
+        return {
+          ...kycCase,
+          documents,
+          status: deriveCaseStatus({ ...kycCase, documents }),
+        };
+      })
+    );
+  };
+
   const value = useMemo(
-    () => ({ cases, addCase, updateCaseStatus }),
+    () => ({
+      cases,
+      addCase,
+      updateCaseStatus,
+      uploadDocument,
+      updateDocumentStatus,
+    }),
     [cases]
   );
 

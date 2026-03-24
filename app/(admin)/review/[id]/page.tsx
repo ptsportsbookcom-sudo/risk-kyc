@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ReviewStatus, useKycCases } from "@/app/components/kyc-cases-context";
+import {
+  DocumentType,
+  ReviewStatus,
+  useKycCases,
+  VerificationType,
+} from "@/app/components/kyc-cases-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -28,8 +33,31 @@ function restrictionClass(restriction: string) {
   return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
 }
 
+function documentStatusClass(status: ReviewStatus) {
+  if (status === "Approved") {
+    return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+  }
+
+  if (status === "Rejected") {
+    return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
+  }
+
+  return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+}
+
+function getRequiredDocumentTypes(verificationRequired: VerificationType[]) {
+  if (verificationRequired.includes("Full KYC")) {
+    return ["ID", "Selfie", "Proof"] as DocumentType[];
+  }
+
+  return verificationRequired.filter(
+    (item): item is DocumentType => item === "ID" || item === "Selfie" || item === "Proof"
+  );
+}
+
 export default function CaseDetailsPage() {
-  const { cases, updateCaseStatus } = useKycCases();
+  const { cases, updateCaseStatus, uploadDocument, updateDocumentStatus } =
+    useKycCases();
   const params = useParams<{ id: string }>();
   const caseId = Array.isArray(params.id) ? params.id[0] : params.id;
   const selectedCase = cases.find((kycCase) => kycCase.id === caseId);
@@ -50,6 +78,8 @@ export default function CaseDetailsPage() {
       </section>
     );
   }
+
+  const requiredDocuments = getRequiredDocumentTypes(selectedCase.verificationRequired);
 
   return (
     <div className="space-y-5">
@@ -125,7 +155,75 @@ export default function CaseDetailsPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-          4. Status
+          4. Documents
+        </h4>
+        {requiredDocuments.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            No document verification required.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {requiredDocuments.map((documentType) => {
+              const document = selectedCase.documents.find(
+                (item) => item.type === documentType
+              );
+
+              return (
+                <article
+                  key={documentType}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
+                >
+                  <p className="text-sm font-medium text-slate-800">
+                    {documentType}
+                  </p>
+
+                  {document ? (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${documentStatusClass(
+                          document.status
+                        )}`}
+                      >
+                        {document.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDocumentStatus(selectedCase.id, documentType, "Approved")
+                        }
+                        className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDocumentStatus(selectedCase.id, documentType, "Rejected")
+                        }
+                        className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => uploadDocument(selectedCase.id, documentType)}
+                      className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
+                    >
+                      Upload
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          5. Status
         </h4>
         <div className="mt-3">
           <span
@@ -140,7 +238,7 @@ export default function CaseDetailsPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-          5. Actions
+          6. Actions
         </h4>
         <div className="mt-3 flex gap-2">
           <button
