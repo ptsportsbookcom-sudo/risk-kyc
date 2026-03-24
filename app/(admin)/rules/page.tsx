@@ -9,12 +9,22 @@ type RestrictionType =
   | "Deposit Block"
   | "Casino Block"
   | "Full Account Block";
+type ConditionType =
+  | "Country/State"
+  | "Single deposit"
+  | "Number of deposits"
+  | "Lifetime deposit"
+  | "Single withdrawal"
+  | "Number of withdrawals"
+  | "Lifetime withdrawal"
+  | "Number of bonuses used"
+  | "Bet count";
 
 type Rule = {
   id: string;
   eventType: EventType;
-  amountThreshold: number;
-  countThreshold: number;
+  conditionType: ConditionType;
+  conditionValue: string;
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];
 };
@@ -31,11 +41,40 @@ const restrictionOptions: RestrictionType[] = [
   "Casino Block",
   "Full Account Block",
 ];
+const countryOptions = ["United States", "Canada", "United Kingdom", "India"];
+const stateOptions = [
+  "California",
+  "New York",
+  "Texas",
+  "Ontario",
+  "London",
+  "Maharashtra",
+];
+const depositConditionOptions: Extract<
+  ConditionType,
+  "Single deposit" | "Number of deposits" | "Lifetime deposit"
+>[] = ["Single deposit", "Number of deposits", "Lifetime deposit"];
+const withdrawalConditionOptions: Extract<
+  ConditionType,
+  "Single withdrawal" | "Number of withdrawals" | "Lifetime withdrawal"
+>[] = ["Single withdrawal", "Number of withdrawals", "Lifetime withdrawal"];
+
+function getDefaultConditionType(eventType: EventType): ConditionType {
+  if (eventType === "Deposit") return "Single deposit";
+  if (eventType === "Withdrawal") return "Single withdrawal";
+  if (eventType === "Bonus") return "Number of bonuses used";
+  if (eventType === "Bet") return "Bet count";
+  return "Country/State";
+}
 
 export default function RulesPage() {
   const [eventType, setEventType] = useState<EventType>("Registration");
-  const [amountThreshold, setAmountThreshold] = useState("");
-  const [countThreshold, setCountThreshold] = useState("");
+  const [country, setCountry] = useState(countryOptions[0]);
+  const [state, setState] = useState(stateOptions[0]);
+  const [conditionType, setConditionType] = useState<ConditionType>(
+    getDefaultConditionType("Registration")
+  );
+  const [conditionValue, setConditionValue] = useState("");
   const [verificationRequired, setVerificationRequired] = useState<
     VerificationType[]
   >([]);
@@ -58,24 +97,32 @@ export default function RulesPage() {
     );
   };
 
+  const onEventTypeChange = (nextEventType: EventType) => {
+    setEventType(nextEventType);
+    setConditionType(getDefaultConditionType(nextEventType));
+    setConditionValue("");
+  };
+
   const onSaveRule = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const resolvedConditionValue =
+      eventType === "Registration" ? `${country} / ${state}` : conditionValue;
 
     const createdRule: Rule = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       eventType,
-      amountThreshold: Number(amountThreshold || 0),
-      countThreshold: Number(countThreshold || 0),
+      conditionType,
+      conditionValue: resolvedConditionValue || "N/A",
       verificationRequired,
       restrictions,
     };
 
     setRules((currentRules) => [createdRule, ...currentRules]);
-    setAmountThreshold("");
-    setCountThreshold("");
+    setConditionValue("");
     setVerificationRequired([]);
     setRestrictions([]);
-    setEventType("Registration");
+    onEventTypeChange("Registration");
   };
 
   return (
@@ -93,7 +140,7 @@ export default function RulesPage() {
             </h4>
             <select
               value={eventType}
-              onChange={(event) => setEventType(event.target.value as EventType)}
+              onChange={(event) => onEventTypeChange(event.target.value as EventType)}
               className="w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
             >
               <option value="Registration">Registration</option>
@@ -108,43 +155,146 @@ export default function RulesPage() {
             <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
               2. Conditions
             </h4>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <label
-                  htmlFor="amountThreshold"
-                  className="text-sm font-medium text-slate-700"
-                >
-                  Amount threshold
-                </label>
-                <input
-                  id="amountThreshold"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amountThreshold}
-                  onChange={(event) => setAmountThreshold(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                />
+            {eventType === "Registration" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Country
+                  </label>
+                  <select
+                    value={country}
+                    onChange={(event) => setCountry(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {countryOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    State
+                  </label>
+                  <select
+                    value={state}
+                    onChange={(event) => setState(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {stateOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+            ) : null}
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="countThreshold"
-                  className="text-sm font-medium text-slate-700"
-                >
-                  Count threshold
+            {eventType === "Deposit" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Condition type
+                  </label>
+                  <select
+                    value={conditionType}
+                    onChange={(event) =>
+                      setConditionType(event.target.value as ConditionType)
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {depositConditionOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Value
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={conditionValue}
+                    onChange={(event) => setConditionValue(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {eventType === "Withdrawal" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Condition type
+                  </label>
+                  <select
+                    value={conditionType}
+                    onChange={(event) =>
+                      setConditionType(event.target.value as ConditionType)
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {withdrawalConditionOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Value
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={conditionValue}
+                    onChange={(event) => setConditionValue(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {eventType === "Bonus" ? (
+              <div className="max-w-sm space-y-1">
+                <label className="text-sm font-medium text-slate-700">
+                  Number of bonuses used
                 </label>
                 <input
-                  id="countThreshold"
                   type="number"
                   min="0"
                   step="1"
-                  value={countThreshold}
-                  onChange={(event) => setCountThreshold(event.target.value)}
+                  value={conditionValue}
+                  onChange={(event) => setConditionValue(event.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
                 />
               </div>
-            </div>
+            ) : null}
+
+            {eventType === "Bet" ? (
+              <div className="max-w-sm space-y-1">
+                <label className="text-sm font-medium text-slate-700">
+                  Bet count
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={conditionValue}
+                  onChange={(event) => setConditionValue(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                />
+              </div>
+            ) : null}
           </section>
 
           <section className="space-y-2">
@@ -220,8 +370,7 @@ export default function RulesPage() {
                   Event: {rule.eventType}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Conditions: Amount &gt; {rule.amountThreshold} | Count &gt;{" "}
-                  {rule.countThreshold}
+                  Condition: {rule.conditionType} = {rule.conditionValue}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Verification:{" "}
