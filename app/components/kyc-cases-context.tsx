@@ -86,6 +86,14 @@ function deriveCaseStatus(caseData: KycCase): ReviewStatus {
   return "Pending";
 }
 
+function normalizeRestrictionsForStatus(caseData: KycCase) {
+  if (caseData.status === "Approved") {
+    return { ...caseData, restrictions: [] };
+  }
+
+  return caseData;
+}
+
 export function KycCasesProvider({ children }: { children: ReactNode }) {
   const [cases, setCases] = useState<KycCase[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -101,10 +109,12 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
 
       const parsedCases = JSON.parse(savedCases) as KycCase[];
       const normalizedCases = Array.isArray(parsedCases)
-        ? parsedCases.map((kycCase) => ({
-            ...kycCase,
-            documents: Array.isArray(kycCase.documents) ? kycCase.documents : [],
-          }))
+        ? parsedCases.map((kycCase) =>
+            normalizeRestrictionsForStatus({
+              ...kycCase,
+              documents: Array.isArray(kycCase.documents) ? kycCase.documents : [],
+            })
+          )
         : [];
       setCases(normalizedCases);
     } catch {
@@ -144,7 +154,9 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
   const updateCaseStatus = (caseId: string, status: ReviewStatus) => {
     setCases((currentCases) =>
       currentCases.map((kycCase) =>
-        kycCase.id === caseId ? { ...kycCase, status } : kycCase
+        kycCase.id === caseId
+          ? normalizeRestrictionsForStatus({ ...kycCase, status })
+          : kycCase
       )
     );
   };
@@ -167,11 +179,11 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
           ? kycCase.documents.map((doc) => (doc.type === type ? uploadedDocument : doc))
           : [...kycCase.documents, uploadedDocument];
 
-        return {
+        return normalizeRestrictionsForStatus({
           ...kycCase,
           documents,
           status: deriveCaseStatus({ ...kycCase, documents }),
-        };
+        });
       })
     );
   };
@@ -191,11 +203,11 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
           doc.type === type ? { ...doc, status } : doc
         );
 
-        return {
+        return normalizeRestrictionsForStatus({
           ...kycCase,
           documents,
           status: deriveCaseStatus({ ...kycCase, documents }),
-        };
+        });
       })
     );
   };
