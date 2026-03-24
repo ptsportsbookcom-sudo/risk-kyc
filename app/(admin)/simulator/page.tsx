@@ -59,22 +59,27 @@ export default function SimulatorPage() {
     const parsedAmount = Number(amount || 0);
     const hasBonusAbuse = selectedRiskFlags.includes("Bonus Abuse");
     const hasSuspiciousDevice = selectedRiskFlags.includes("Suspicious Device");
+    const restrictions: string[] = [];
 
     let triggeredAction = "No risk rules triggered";
     const createdCaseStatus = "Case Created (Pending)";
-    let appliedRestriction = "None";
     let verificationRequired: SimulationResult["verificationRequired"] = "None";
 
     if (eventType === "Withdrawal" && parsedAmount > 1000) {
       triggeredAction = "High-value withdrawal review";
-      appliedRestriction = "Withdrawal Block";
+      restrictions.push("Withdrawal Block");
       verificationRequired = "Full KYC";
     } else if (eventType === "Deposit" && parsedAmount > 500) {
       triggeredAction = "High-value deposit review";
+      restrictions.push("Monitoring Flag");
       verificationRequired = "ID";
     } else if (eventType === "Bonus Activation" && hasBonusAbuse) {
       triggeredAction = "Bonus abuse risk review";
       verificationRequired = "Full KYC";
+    }
+
+    if (hasBonusAbuse) {
+      restrictions.push("Casino Block");
     }
 
     if (hasSuspiciousDevice) {
@@ -82,10 +87,7 @@ export default function SimulatorPage() {
         triggeredAction === "No risk rules triggered"
           ? "Suspicious device pattern detected"
           : `${triggeredAction} + suspicious device pattern`;
-      appliedRestriction =
-        appliedRestriction === "None"
-          ? "Device Restriction"
-          : `${appliedRestriction} + Device Restriction`;
+      restrictions.push("Full Account Block");
     }
 
     const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
@@ -97,12 +99,14 @@ export default function SimulatorPage() {
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationType: caseVerificationType,
+      restrictions,
     });
 
     setResult({
       triggeredAction,
       createdCaseStatus,
-      appliedRestriction,
+      appliedRestriction:
+        restrictions.length > 0 ? restrictions.join(", ") : "None",
       verificationRequired,
     });
   };

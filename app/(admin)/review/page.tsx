@@ -19,6 +19,18 @@ function statusClass(status: ReviewStatus) {
   return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
 }
 
+function restrictionClass(restriction: string) {
+  if (restriction === "Full Account Block") {
+    return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
+  }
+
+  if (restriction === "Withdrawal Block" || restriction === "Casino Block") {
+    return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
+  }
+
+  return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
+}
+
 export default function ReviewPage() {
   const { cases, updateCaseStatus } = useKycCases();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
@@ -136,6 +148,9 @@ export default function ReviewPage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Created Date
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Restrictions
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Actions
                 </th>
@@ -164,6 +179,24 @@ export default function ReviewPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
                     {row.createdDate}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {row.restrictions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.restrictions.map((restriction) => (
+                          <span
+                            key={restriction}
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(
+                              restriction
+                            )}`}
+                          >
+                            {restriction}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">None</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">

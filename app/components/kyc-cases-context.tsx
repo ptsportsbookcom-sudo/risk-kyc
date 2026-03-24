@@ -12,12 +12,14 @@ export type KycCase = {
   verificationType: VerificationType;
   status: ReviewStatus;
   createdDate: string;
+  restrictions: string[];
 };
 
 type CreateKycCaseInput = {
   userId: string;
   username: string;
   verificationType: VerificationType;
+  restrictions: string[];
 };
 
 type KycCasesContextValue = {
@@ -43,6 +45,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         verificationType: input.verificationType,
         status: "Pending",
         createdDate,
+        restrictions: input.restrictions,
       },
       ...currentCases,
     ]);
