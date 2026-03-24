@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
   DocumentType,
   useKycCases,
@@ -29,10 +28,12 @@ function documentStatusClass(status: "Pending" | "Approved" | "Rejected") {
 }
 
 export default function PlayerKycPage() {
-  const searchParams = useSearchParams();
   const { cases, uploadDocument } = useKycCases();
   const pendingCase = cases.find((item) => item.status === "Pending");
-  const reason = searchParams.get("reason");
+  const reason =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("reason")
+      : null;
 
   if (!pendingCase) {
     return (
