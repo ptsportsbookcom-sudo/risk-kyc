@@ -99,14 +99,21 @@ function statusClass(status: ReviewStatus) {
 }
 
 export default function ReviewPage() {
+  const [rows, setRows] = useState<KycRow[]>(mockRows);
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
     "All" | VerificationType
   >("All");
   const [usernameQuery, setUsernameQuery] = useState("");
 
+  const updateRowStatus = (userId: string, status: ReviewStatus) => {
+    setRows((currentRows) =>
+      currentRows.map((row) => (row.userId === userId ? { ...row, status } : row))
+    );
+  };
+
   const filteredRows = useMemo(() => {
-    return mockRows.filter((row) => {
+    return rows.filter((row) => {
       const matchesStatus =
         statusFilter === "All" ? true : row.status === statusFilter;
       const matchesVerification =
@@ -119,7 +126,7 @@ export default function ReviewPage() {
 
       return matchesStatus && matchesVerification && matchesUsername;
     });
-  }, [statusFilter, verificationFilter, usernameQuery]);
+  }, [rows, statusFilter, verificationFilter, usernameQuery]);
 
   return (
     <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -246,6 +253,7 @@ export default function ReviewPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
+                        onClick={() => updateRowStatus(row.userId, "Approved")}
                         className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
                         aria-label={`Approve ${row.username}`}
                       >
@@ -253,6 +261,7 @@ export default function ReviewPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => updateRowStatus(row.userId, "Rejected")}
                         className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
                         aria-label={`Reject ${row.username}`}
                       >
