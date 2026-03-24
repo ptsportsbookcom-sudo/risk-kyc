@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 export type VerificationType = "ID" | "Selfie" | "Proof" | "Full KYC";
 export type ReviewStatus = "Pending" | "Approved" | "Rejected";
@@ -29,9 +36,37 @@ type KycCasesContextValue = {
 };
 
 const KycCasesContext = createContext<KycCasesContextValue | undefined>(undefined);
+const KYC_CASES_STORAGE_KEY = "kyc_cases";
 
 export function KycCasesProvider({ children }: { children: ReactNode }) {
   const [cases, setCases] = useState<KycCase[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedCases = window.localStorage.getItem(KYC_CASES_STORAGE_KEY);
+      if (!savedCases) {
+        setCases([]);
+        setIsHydrated(true);
+        return;
+      }
+
+      const parsedCases = JSON.parse(savedCases) as KycCase[];
+      setCases(Array.isArray(parsedCases) ? parsedCases : []);
+    } catch {
+      setCases([]);
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(KYC_CASES_STORAGE_KEY, JSON.stringify(cases));
+  }, [cases, isHydrated]);
 
   const addCase = (input: CreateKycCaseInput) => {
     const now = new Date();
