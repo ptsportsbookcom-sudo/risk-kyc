@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 import { EventType, Rule, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
@@ -21,6 +22,7 @@ const initialResult: SimulationResult = {
 export default function SimulatorPage() {
   const { rules } = useRules();
   const { addCase } = useKycCases();
+  const { applyTriggerToPlayer } = usePlayers();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
@@ -81,18 +83,32 @@ export default function SimulatorPage() {
       return;
     }
 
+    let createdCases = 0;
     matchedRules.forEach((rule) => {
-      addCase({
-        userId: normalizedUserId,
+      const triggerResult = applyTriggerToPlayer({
+        id: normalizedUserId,
         username: normalizedUsername,
         verificationRequired: rule.verificationRequired,
         restrictions: rule.restrictions,
       });
+
+      if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
+        addCase({
+          userId: normalizedUserId,
+          username: normalizedUsername,
+          verificationRequired: rule.verificationRequired,
+          restrictions: triggerResult.appliedRestrictions,
+        });
+        createdCases += 1;
+      }
     });
 
     setResult({
       triggeredAction: `${matchedRules.length} rule(s) triggered`,
-      createdCaseStatus: `${matchedRules.length} case(s) created (Pending)`,
+      createdCaseStatus:
+        createdCases > 0
+          ? `${createdCases} case(s) created (Pending)`
+          : "No case created",
       appliedRestriction: (() => {
         const uniqueRestrictions = Array.from(
           new Set(matchedRules.flatMap((rule) => rule.restrictions))

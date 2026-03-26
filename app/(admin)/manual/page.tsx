@@ -5,6 +5,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 import { RestrictionType } from "@/app/components/rules-context";
 
 const verificationOptions: VerificationType[] = [
@@ -23,6 +24,7 @@ const restrictionOptions: RestrictionType[] = [
 
 export default function ManualTriggerPage() {
   const { addCase } = useKycCases();
+  const { applyTriggerToPlayer } = usePlayers();
 
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
@@ -54,18 +56,29 @@ export default function ManualTriggerPage() {
     const normalizedUserId = userId.trim() || `MANUAL-${Date.now()}`;
     const normalizedUsername = username.trim() || "manual_user";
 
-    addCase({
-      userId: normalizedUserId,
+    const triggerResult = applyTriggerToPlayer({
+      id: normalizedUserId,
       username: normalizedUsername,
       verificationRequired,
       restrictions,
     });
 
+    if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
+      addCase({
+        userId: normalizedUserId,
+        username: normalizedUsername,
+        verificationRequired,
+        restrictions: triggerResult.appliedRestrictions,
+      });
+      setSuccessMessage("Manual KYC trigger applied and case created.");
+    } else {
+      setSuccessMessage("Trigger applied, but no new case was required.");
+    }
+
     setUserId("");
     setUsername("");
     setVerificationRequired([]);
     setRestrictions([]);
-    setSuccessMessage("Manual KYC trigger applied successfully.");
   };
 
   return (

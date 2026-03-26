@@ -7,6 +7,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -35,6 +36,7 @@ function restrictionClass(restriction: string) {
 export default function ReviewPage() {
   const router = useRouter();
   const { cases, updateCaseStatus } = useKycCases();
+  const { getPlayerById } = usePlayers();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
     "All" | VerificationType
@@ -145,6 +147,9 @@ export default function ReviewPage() {
                   Verification Type
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  KYC Level
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -159,7 +164,10 @@ export default function ReviewPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {filteredRows.map((row) => (
+              {filteredRows.map((row) => {
+                const player = getPlayerById(row.userId);
+                const playerRestrictions = player?.restrictions ?? [];
+                return (
                 <tr
                   key={row.id}
                   className="cursor-pointer hover:bg-slate-50/70"
@@ -174,6 +182,9 @@ export default function ReviewPage() {
                   <td className="px-4 py-3 text-sm text-slate-700">
                     {row.verificationRequired.join(", ")}
                   </td>
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {player?.kycLevel ?? "L0"}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
@@ -187,9 +198,9 @@ export default function ReviewPage() {
                     {row.createdDate}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {row.restrictions.length > 0 ? (
+                    {playerRestrictions.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {row.restrictions.map((restriction) => (
+                        {playerRestrictions.map((restriction) => (
                           <span
                             key={restriction}
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(
@@ -231,7 +242,8 @@ export default function ReviewPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

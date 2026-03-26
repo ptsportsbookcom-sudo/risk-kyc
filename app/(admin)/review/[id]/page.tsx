@@ -8,6 +8,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -58,6 +59,7 @@ function getRequiredDocumentTypes(verificationRequired: VerificationType[]) {
 export default function CaseDetailsPage() {
   const { cases, updateCaseStatus, uploadDocument, updateDocumentStatus } =
     useKycCases();
+  const { getPlayerById } = usePlayers();
   const params = useParams<{ id: string }>();
   const caseId = Array.isArray(params.id) ? params.id[0] : params.id;
   const selectedCase = cases.find((kycCase) => kycCase.id === caseId);
@@ -80,6 +82,8 @@ export default function CaseDetailsPage() {
   }
 
   const requiredDocuments = getRequiredDocumentTypes(selectedCase.verificationRequired);
+  const player = getPlayerById(selectedCase.userId);
+  const currentRestrictions = player?.restrictions ?? selectedCase.restrictions;
 
   return (
     <div className="space-y-5">
@@ -107,6 +111,7 @@ export default function CaseDetailsPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <InfoItem label="User ID" value={selectedCase.userId} />
           <InfoItem label="Username" value={selectedCase.username} />
+          <InfoItem label="KYC Level" value={player?.kycLevel ?? "L0"} />
           <InfoItem label="Created date" value={selectedCase.createdDate} />
         </div>
       </section>
@@ -136,8 +141,8 @@ export default function CaseDetailsPage() {
           3. Restrictions
         </h4>
         <div className="mt-3 flex flex-wrap gap-2">
-          {selectedCase.restrictions.length > 0 ? (
-            selectedCase.restrictions.map((restriction) => (
+          {currentRestrictions.length > 0 ? (
+            currentRestrictions.map((restriction) => (
               <span
                 key={restriction}
                 className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(

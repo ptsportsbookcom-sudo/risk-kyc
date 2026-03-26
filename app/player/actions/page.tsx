@@ -4,16 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 
 type PlayerAction = "Deposit" | "Withdraw" | "Play Casino";
 
 export default function PlayerActionsPage() {
   const router = useRouter();
   const { cases } = useKycCases();
+  const { getPlayerById } = usePlayers();
   const [message, setMessage] = useState("");
 
   const pendingCase = cases.find((item) => item.status === "Pending");
-  const restrictions = pendingCase?.restrictions ?? [];
+  const player = pendingCase ? getPlayerById(pendingCase.userId) : undefined;
+  const restrictions = player?.restrictions ?? pendingCase?.restrictions ?? [];
 
   const tryAction = (action: PlayerAction) => {
     if (action === "Withdraw" && restrictions.includes("Withdrawal Block")) {
