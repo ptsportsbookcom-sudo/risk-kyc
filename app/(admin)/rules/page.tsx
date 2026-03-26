@@ -5,6 +5,7 @@ import { VerificationType } from "@/app/components/kyc-cases-context";
 import {
   EventType,
   RuleField,
+  RuleLogic,
   RuleOperator,
   RestrictionType,
   useRules,
@@ -44,7 +45,7 @@ function getDefaultField(eventType: EventType): RuleField {
   if (eventType === "Withdrawal") return "withdrawalAmount";
   if (eventType === "Bonus") return "bonusesUsed";
   if (eventType === "Bet Placement") return "betAmount";
-  return "countryState";
+  return "country";
 }
 
 export default function RulesPage() {
@@ -55,6 +56,10 @@ export default function RulesPage() {
   const [field, setField] = useState<RuleField>(getDefaultField("Registration"));
   const [operator, setOperator] = useState<RuleOperator>("==");
   const [value, setValue] = useState("");
+  const [conditions, setConditions] = useState<
+    Array<{ field: RuleField; operator: RuleOperator; value: string }>
+  >([{ field: "depositAmount", operator: ">", value: "" }]);
+  const [conditionLogic, setConditionLogic] = useState<RuleLogic>("ALL");
   const [verificationRequired, setVerificationRequired] = useState<
     VerificationType[]
   >([]);
@@ -92,18 +97,58 @@ export default function RulesPage() {
     setOperator(nextEventType === "Registration" ? "==" : ">");
     setValue("");
     setIsLiveOnly(false);
+    setConditionLogic("ALL");
+    setConditions([{ field: getDefaultField(nextEventType), operator: ">", value: "" }]);
+  };
+
+  const updateCondition = (
+    index: number,
+    patch: Partial<{ field: RuleField; operator: RuleOperator; value: string }>
+  ) => {
+    setConditions((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    );
+  };
+
+  const addCondition = () => {
+    setConditions((current) => [
+      ...current,
+      { field: getDefaultField(eventType), operator: ">", value: "" },
+    ]);
+  };
+
+  const removeCondition = (index: number) => {
+    setConditions((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const onSaveRule = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const resolvedValue = eventType === "Registration" ? `${country} / ${state}` : value;
+    const normalizedConditions =
+      eventType === "Registration"
+        ? [
+            { field: "country" as RuleField, operator: "==" as RuleOperator, value: country },
+            { field: "state" as RuleField, operator: "==" as RuleOperator, value: state },
+          ]
+        : conditions.filter((item) => item.value.trim() !== "");
+    const primaryCondition =
+      normalizedConditions[0] ??
+      ({ field, operator, value: resolvedValue || "N/A" } as {
+        field: RuleField;
+        operator: RuleOperator;
+        value: string;
+      });
 
     addRule({
       eventType,
-      field,
-      operator,
-      value: resolvedValue || "N/A",
+      conditions: normalizedConditions,
+      conditionLogic,
+      field: primaryCondition.field,
+      operator: primaryCondition.operator,
+      value: primaryCondition.value,
       isLiveOnly: eventType === "Bet Placement" ? isLiveOnly : undefined,
       verificationRequired,
       restrictions,
@@ -183,68 +228,116 @@ export default function RulesPage() {
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <ReadOnlyField label="Field" value="countryState" />
+                  <ReadOnlyField label="Field" value="country" />
                   <ReadOnlyField label="Operator" value="==" />
-                  <ReadOnlyField label="Value" value={`${country} / ${state}`} />
+                  <ReadOnlyField label="Value" value={country} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <ReadOnlyField label="Field" value="state" />
+                  <ReadOnlyField label="Operator" value="==" />
+                  <ReadOnlyField label="Value" value={state} />
                 </div>
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Field
-                  </label>
-                  <select
-                    value={field}
-                    onChange={(event) => setField(event.target.value as RuleField)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              <div className="space-y-3">
+                <div className="inline-flex rounded-lg border border-slate-300 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setConditionLogic("ALL")}
+                    className={`rounded-md px-3 py-1 text-sm font-medium ${
+                      conditionLogic === "ALL"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700"
+                    }`}
                   >
-                    {eventType === "Deposit" ? (
-                      <option value="depositAmount">depositAmount</option>
-                    ) : null}
-                    {eventType === "Withdrawal" ? (
-                      <option value="withdrawalAmount">withdrawalAmount</option>
-                    ) : null}
-                    {eventType === "Bonus" ? (
-                      <option value="bonusesUsed">bonusesUsed</option>
-                    ) : null}
-                    {eventType === "Bet Placement" ? (
-                      <>
-                        <option value="betAmount">betAmount</option>
-                        <option value="odds">odds</option>
-                      </>
-                    ) : null}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Operator
-                  </label>
-                  <select
-                    value={operator}
-                    onChange={(event) => setOperator(event.target.value as RuleOperator)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    ALL (AND)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConditionLogic("ANY")}
+                    className={`rounded-md px-3 py-1 text-sm font-medium ${
+                      conditionLogic === "ANY"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700"
+                    }`}
                   >
-                    {operatorOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
+                    ANY (OR)
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Value
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={value}
-                    onChange={(event) => setValue(event.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  />
-                </div>
+
+                {conditions.map((condition, index) => (
+                  <div key={index} className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]">
+                    <select
+                      value={condition.field}
+                      onChange={(event) =>
+                        updateCondition(index, {
+                          field: event.target.value as RuleField,
+                        })
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    >
+                      {eventType === "Deposit" ? (
+                        <option value="depositAmount">depositAmount</option>
+                      ) : null}
+                      {eventType === "Withdrawal" ? (
+                        <option value="withdrawalAmount">withdrawalAmount</option>
+                      ) : null}
+                      {eventType === "Bonus" ? (
+                        <option value="bonusesUsed">bonusesUsed</option>
+                      ) : null}
+                      {eventType === "Bet Placement" ? (
+                        <>
+                          <option value="betAmount">betAmount</option>
+                          <option value="odds">odds</option>
+                        </>
+                      ) : null}
+                    </select>
+
+                    <select
+                      value={condition.operator}
+                      onChange={(event) =>
+                        updateCondition(index, {
+                          operator: event.target.value as RuleOperator,
+                        })
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    >
+                      {operatorOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={condition.value}
+                      onChange={(event) =>
+                        updateCondition(index, { value: event.target.value })
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeCondition(index)}
+                      disabled={conditions.length === 1}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addCondition}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                >
+                  Add Condition
+                </button>
               </div>
             )}
 
@@ -356,7 +449,12 @@ export default function RulesPage() {
                   Event: {rule.eventType}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Condition: {rule.field} {rule.operator} {rule.value}
+                  Condition:{" "}
+                  {rule.conditions && rule.conditions.length > 0
+                    ? `${rule.conditionLogic ?? "ALL"} -> ${rule.conditions
+                        .map((item) => `${item.field} ${item.operator} ${item.value}`)
+                        .join(" | ")}`
+                    : `${rule.field} ${rule.operator} ${rule.value}`}
                   {rule.isLiveOnly ? " (Live Only)" : ""}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">

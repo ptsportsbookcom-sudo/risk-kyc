@@ -39,8 +39,11 @@ export default function SimulatorPage() {
     rule: Rule,
     simulation: {
       eventType: EventType;
-      amount: number;
+      depositAmount: number;
+      withdrawalAmount: number;
       count: number;
+      country: string;
+      state: string;
       betAmount: number;
       odds: number;
       isLive: boolean;
@@ -59,7 +62,7 @@ export default function SimulatorPage() {
     }
 
     const legacyFieldMap: Record<string, { field: string; operator: string }> = {
-      "Country/State": { field: "countryState", operator: "==" },
+      "Country/State": { field: "country", operator: "==" },
       "Single deposit": { field: "depositAmount", operator: ">" },
       "Number of deposits": { field: "count", operator: ">" },
       "Lifetime deposit": { field: "count", operator: ">" },
@@ -71,39 +74,61 @@ export default function SimulatorPage() {
       "Odds >": { field: "odds", operator: ">" },
     };
 
-    const effectiveField =
-      rule.field ?? legacyFieldMap[rule.conditionType ?? ""]?.field ?? "count";
-    const effectiveOperator =
-      rule.operator ?? legacyFieldMap[rule.conditionType ?? ""]?.operator ?? ">";
-    const effectiveValue = rule.value ?? rule.conditionValue ?? "0";
+    const normalizedConditions =
+      rule.conditions && rule.conditions.length > 0
+        ? rule.conditions
+        : [
+            {
+              field:
+                (rule.field as string) ??
+                legacyFieldMap[rule.conditionType ?? ""]?.field ??
+                "count",
+              operator:
+                rule.operator ??
+                legacyFieldMap[rule.conditionType ?? ""]?.operator ??
+                ">",
+              value: rule.value ?? rule.conditionValue ?? "0",
+            },
+          ];
 
-    if (effectiveField === "countryState") {
+    const evaluateCondition = (condition: {
+      field: string;
+      operator: string;
+      value: string;
+    }) => {
+      if (condition.field === "country") {
+        return evaluateOperator(simulation.country, condition.operator, condition.value);
+      }
+      if (condition.field === "state") {
+        return evaluateOperator(simulation.state, condition.operator, condition.value);
+      }
+
+      const numericValue = Number(condition.value);
+      if (Number.isNaN(numericValue)) {
+        return false;
+      }
+
+      const numericByField: Record<string, number> = {
+        depositAmount: simulation.depositAmount,
+        withdrawalAmount: simulation.withdrawalAmount,
+        bonusesUsed: simulation.count,
+        betAmount: simulation.betAmount,
+        odds: simulation.odds,
+        count: simulation.count,
+      };
+
       return evaluateOperator(
-        `${country} / ${state}`,
-        effectiveOperator,
-        effectiveValue
+        numericByField[condition.field] ?? simulation.count,
+        condition.operator,
+        numericValue
       );
-    }
-
-    const numericValue = Number(effectiveValue);
-    if (Number.isNaN(numericValue)) {
-      return false;
-    }
-
-    const numericByField: Record<string, number> = {
-      depositAmount: simulation.amount,
-      withdrawalAmount: simulation.amount,
-      bonusesUsed: simulation.count,
-      betAmount: simulation.betAmount,
-      odds: simulation.odds,
-      count: simulation.count,
     };
 
-    return evaluateOperator(
-      numericByField[effectiveField] ?? simulation.count,
-      effectiveOperator,
-      numericValue
-    );
+    if ((rule.conditionLogic ?? "ALL") === "ANY") {
+      return normalizedConditions.some(evaluateCondition);
+    }
+
+    return normalizedConditions.every(evaluateCondition);
   };
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
@@ -111,8 +136,11 @@ export default function SimulatorPage() {
 
     const simulation = {
       eventType,
-      amount: Number(amount || 0),
+      depositAmount: Number(amount || 0),
+      withdrawalAmount: Number(amount || 0),
       count: Number(count || 0),
+      country,
+      state,
       betAmount: Number(betAmount || 0),
       odds: Number(odds || 0),
       isLive,

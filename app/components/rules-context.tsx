@@ -16,13 +16,15 @@ export type EventType =
   | "Bonus"
   | "Bet Placement";
 export type RuleField =
-  | "countryState"
+  | "country"
+  | "state"
   | "depositAmount"
   | "withdrawalAmount"
   | "bonusesUsed"
   | "betAmount"
   | "odds";
 export type RuleOperator = ">" | ">=" | "<" | "<=" | "==";
+export type RuleLogic = "ALL" | "ANY";
 export type ConditionType =
   | "Country/State"
   | "Single deposit"
@@ -38,6 +40,12 @@ export type ConditionType =
 export type Rule = {
   id: string;
   eventType: EventType;
+  conditions?: Array<{
+    field: RuleField;
+    operator: RuleOperator;
+    value: string;
+  }>;
+  conditionLogic?: RuleLogic;
   field: RuleField;
   operator: RuleOperator;
   value: string;
