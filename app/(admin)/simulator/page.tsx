@@ -1,27 +1,36 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useKycCases } from "@/app/components/kyc-cases-context";
+import {
+  useKycCases,
+  VerificationType,
+} from "@/app/components/kyc-cases-context";
 import { runRulesEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
-import { EventType, useRules } from "@/app/components/rules-context";
+import { EventType, RestrictionType, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
   triggeredAction: string;
   triggeredRules: Array<{ id: string; name: string; priority: number }>;
   createdCaseStatus: string;
-  appliedRestriction: string;
-  verificationRequired: string;
-  flags: string;
+  aggregatedVerifications: string;
+  aggregatedRestrictions: string;
+  aggregatedFlags: string;
+  finalVerification: string;
+  finalRestriction: string;
+  finalFlags: string;
 };
 
 const initialResult: SimulationResult = {
   triggeredAction: "No action triggered yet",
   triggeredRules: [],
   createdCaseStatus: "No case created",
-  appliedRestriction: "None",
-  verificationRequired: "None",
-  flags: "None",
+  aggregatedVerifications: "None",
+  aggregatedRestrictions: "None",
+  aggregatedFlags: "None",
+  finalVerification: "None",
+  finalRestriction: "None",
+  finalFlags: "None",
 };
 
 export default function SimulatorPage() {
@@ -78,53 +87,73 @@ export default function SimulatorPage() {
         triggeredAction: "No rule triggered",
         triggeredRules: [],
         createdCaseStatus: "No case created",
-        appliedRestriction: "None",
-        verificationRequired: "None",
-        flags: "None",
+        aggregatedVerifications: "None",
+        aggregatedRestrictions: "None",
+        aggregatedFlags: "None",
+        finalVerification: "None",
+        finalRestriction: "None",
+        finalFlags: "None",
       });
       return;
     }
 
-    let createdCases = 0;
-    engineResult.triggeredRules.forEach((triggeredRule) => {
-      const rule = rules.find((item) => item.id === triggeredRule.id);
-      if (!rule) return;
+    const resolvedVerification = engineResult.finalDecision.verification;
+    const resolvedRestriction = engineResult.finalDecision.restriction;
+    const finalVerifications: VerificationType[] = resolvedVerification
+      ? [resolvedVerification as VerificationType]
+      : [];
+    const finalRestrictions: RestrictionType[] = resolvedRestriction
+      ? [resolvedRestriction as RestrictionType]
+      : [];
 
-      const triggerResult = applyTriggerToPlayer({
-        id: normalizedUserId,
-        username: normalizedUsername,
-        verificationRequired: rule.actions?.verifications ?? rule.verificationRequired,
-        restrictions: rule.actions?.restrictions ?? rule.restrictions,
-        flags: rule.actions?.flags ?? rule.flags,
-      });
-
-      if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
-        addCase({
-          userId: normalizedUserId,
-          username: normalizedUsername,
-          verificationRequired: rule.actions?.verifications ?? rule.verificationRequired,
-          restrictions: triggerResult.appliedRestrictions,
-        });
-        createdCases += 1;
-      }
+    const triggerResult = applyTriggerToPlayer({
+      id: normalizedUserId,
+      username: normalizedUsername,
+      verificationRequired: finalVerifications,
+      restrictions: finalRestrictions,
+      flags: engineResult.finalDecision.flags,
     });
+
+    let createdCases = 0;
+    if (
+      finalVerifications.length > 0 ||
+      finalRestrictions.length > 0 ||
+      engineResult.finalDecision.flags.length > 0
+    ) {
+      addCase({
+        userId: normalizedUserId,
+        username: normalizedUsername,
+        verificationRequired: finalVerifications,
+        restrictions: triggerResult.appliedRestrictions,
+      });
+      createdCases = 1;
+    }
 
     setResult({
       triggeredAction: `${engineResult.triggeredRules.length} rule(s) triggered`,
       triggeredRules: engineResult.triggeredRules,
       createdCaseStatus:
         createdCases > 0
-          ? `${createdCases} case(s) created (Pending)`
+          ? "1 case created (Pending)"
           : "No case created",
-      appliedRestriction:
-        engineResult.restrictions.length > 0
-          ? engineResult.restrictions.join(", ")
+      aggregatedVerifications:
+        engineResult.aggregatedActions.verifications.length > 0
+          ? engineResult.aggregatedActions.verifications.join(", ")
           : "None",
-      verificationRequired:
-        engineResult.verificationRequired.length > 0
-          ? engineResult.verificationRequired.join(", ")
+      aggregatedRestrictions:
+        engineResult.aggregatedActions.restrictions.length > 0
+          ? engineResult.aggregatedActions.restrictions.join(", ")
           : "None",
-      flags: engineResult.flags.length > 0 ? engineResult.flags.join(", ") : "None",
+      aggregatedFlags:
+        engineResult.aggregatedActions.flags.length > 0
+          ? engineResult.aggregatedActions.flags.join(", ")
+          : "None",
+      finalVerification: engineResult.finalDecision.verification ?? "None",
+      finalRestriction: engineResult.finalDecision.restriction ?? "None",
+      finalFlags:
+        engineResult.finalDecision.flags.length > 0
+          ? engineResult.finalDecision.flags.join(", ")
+          : "None",
     });
   };
 
@@ -300,12 +329,6 @@ export default function SimulatorPage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <ResultItem label="Triggered action" value={result.triggeredAction} />
           <ResultItem label="Created case status" value={result.createdCaseStatus} />
-          <ResultItem label="Applied restriction" value={result.appliedRestriction} />
-          <ResultItem
-            label="Verification required"
-            value={result.verificationRequired}
-          />
-          <ResultItem label="Flags" value={result.flags} />
         </div>
 
         <div className="mt-4">
@@ -326,6 +349,34 @@ export default function SimulatorPage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Aggregated Actions
+          </p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <ResultItem
+              label="Verifications"
+              value={result.aggregatedVerifications}
+            />
+            <ResultItem
+              label="Restrictions"
+              value={result.aggregatedRestrictions}
+            />
+            <ResultItem label="Flags" value={result.aggregatedFlags} />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Final Decision
+          </p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <ResultItem label="Verification" value={result.finalVerification} />
+            <ResultItem label="Restriction" value={result.finalRestriction} />
+            <ResultItem label="Flags" value={result.finalFlags} />
+          </div>
         </div>
       </section>
     </div>

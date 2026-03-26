@@ -21,7 +21,44 @@ export type RulesEngineResult = {
   verificationRequired: string[];
   restrictions: string[];
   flags: string[];
+  aggregatedActions: {
+    verifications: string[];
+    restrictions: string[];
+    flags: string[];
+  };
+  finalDecision: {
+    verification: string | null;
+    restriction: string | null;
+    flags: string[];
+    triggeredRules: Array<{ id: string; name: string; priority: number }>;
+    aggregatedActions: {
+      verifications: string[];
+      restrictions: string[];
+      flags: string[];
+    };
+  };
 };
+
+const verificationPriority: Record<string, number> = {
+  ID: 1,
+  Selfie: 2,
+  Proof: 3,
+  "Full KYC": 4,
+};
+
+const restrictionPriority: Record<string, number> = {
+  "Deposit Block": 1,
+  "Withdrawal Block": 2,
+  "Casino Block": 3,
+  "Full Account Block": 4,
+};
+
+function pickHighestPriority(items: string[], priorityMap: Record<string, number>) {
+  if (items.length === 0) return null;
+  return [...items].sort(
+    (left, right) => (priorityMap[right] ?? 0) - (priorityMap[left] ?? 0)
+  )[0];
+}
 
 function evaluateOperator(left: number | string, operator: string, rightRaw: string) {
   if (typeof left === "string") {
@@ -74,15 +111,48 @@ function doesRuleMatch(rule: Rule, playerData: RulesEngineInput["playerData"]) {
     : normalizedConditions.every((condition) => evaluateCondition(condition, playerData));
 }
 
+function getEmptyResult(): RulesEngineResult {
+  return {
+    triggeredRules: [],
+    verificationRequired: [],
+    restrictions: [],
+    flags: [],
+    aggregatedActions: {
+      verifications: [],
+      restrictions: [],
+      flags: [],
+    },
+    finalDecision: {
+      verification: null,
+      restriction: null,
+      flags: [],
+      triggeredRules: [],
+      aggregatedActions: {
+        verifications: [],
+        restrictions: [],
+        flags: [],
+      },
+    },
+  };
+}
+
 export function runRulesEngine({
   eventType,
   playerData,
   rules,
 }: RulesEngineInput): RulesEngineResult {
+  if (!Array.isArray(rules) || rules.length === 0) {
+    return getEmptyResult();
+  }
+
   const eligibleRules = rules
     .filter((rule) => rule.enabled !== false)
     .filter((rule) => rule.eventType === "ANY" || rule.eventType === eventType)
     .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100));
+
+  if (eligibleRules.length === 0) {
+    return getEmptyResult();
+  }
 
   const verificationSet = new Set<string>();
   const restrictionSet = new Set<string>();
@@ -111,11 +181,33 @@ export function runRulesEngine({
     if (rule.stopProcessing) break;
   }
 
-  return {
-    triggeredRules,
-    verificationRequired: Array.from(verificationSet),
+  const aggregatedActions = {
+    verifications: Array.from(verificationSet),
     restrictions: Array.from(restrictionSet),
     flags: Array.from(flagSet),
+  };
+
+  const finalDecision = {
+    verification: pickHighestPriority(
+      aggregatedActions.verifications,
+      verificationPriority
+    ),
+    restriction: pickHighestPriority(
+      aggregatedActions.restrictions,
+      restrictionPriority
+    ),
+    flags: aggregatedActions.flags,
+    triggeredRules,
+    aggregatedActions,
+  };
+
+  return {
+    triggeredRules,
+    verificationRequired: aggregatedActions.verifications,
+    restrictions: aggregatedActions.restrictions,
+    flags: aggregatedActions.flags,
+    aggregatedActions,
+    finalDecision,
   };
 }
 
