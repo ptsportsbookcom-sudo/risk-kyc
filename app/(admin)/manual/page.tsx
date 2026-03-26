@@ -5,6 +5,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { resolveAggregatedActions } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
 import { RestrictionType } from "@/app/components/rules-context";
 
@@ -22,16 +23,28 @@ const restrictionOptions: RestrictionType[] = [
   "Full Account Block",
 ];
 
+const flagOptions = [
+  "High Bet Amount",
+  "Live Bet Risk",
+  "High Odds Risk",
+  "Bet Velocity",
+];
+
+const AUDIT_LOG_KEY = "audit_log_entries";
+
 export default function ManualTriggerPage() {
   const { addCase } = useKycCases();
   const { applyTriggerToPlayer } = usePlayers();
 
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
+  const [reason, setReason] = useState("");
+  const [actionType, setActionType] = useState<"KYC" | "Restriction" | "Flag">("KYC");
   const [verificationRequired, setVerificationRequired] = useState<
     VerificationType[]
   >([]);
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
+  const [flags, setFlags] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
 
   const toggleVerification = (value: VerificationType) => {
@@ -50,35 +63,87 @@ export default function ManualTriggerPage() {
     );
   };
 
+  const toggleFlag = (value: string) => {
+    setFlags((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    );
+  };
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!reason.trim()) {
+      setSuccessMessage("Reason is required.");
+      return;
+    }
 
     const normalizedUserId = userId.trim() || `MANUAL-${Date.now()}`;
     const normalizedUsername = username.trim() || "manual_user";
+    const aggregated = {
+      verifications: actionType === "KYC" ? verificationRequired : [],
+      restrictions: actionType === "Restriction" ? restrictions : [],
+      flags: actionType === "Flag" ? flags : [],
+    };
+    const resolved = resolveAggregatedActions(aggregated);
+    const finalVerifications = resolved.verification
+      ? [resolved.verification as VerificationType]
+      : [];
+    const finalRestrictions = resolved.restriction
+      ? [resolved.restriction as RestrictionType]
+      : [];
 
-    const triggerResult = applyTriggerToPlayer({
+    applyTriggerToPlayer({
       id: normalizedUserId,
       username: normalizedUsername,
-      verificationRequired,
-      restrictions,
+      verificationRequired: finalVerifications,
+      restrictions: finalRestrictions,
+      flags: resolved.flags,
     });
 
-    if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
-      addCase({
-        userId: normalizedUserId,
-        username: normalizedUsername,
-        verificationRequired,
-        restrictions: triggerResult.appliedRestrictions,
-      });
-      setSuccessMessage("Manual KYC trigger applied and case created.");
-    } else {
-      setSuccessMessage("Trigger applied, but no new case was required.");
+    addCase({
+      userId: normalizedUserId,
+      username: normalizedUsername,
+      verificationRequired: finalVerifications,
+      restrictions: finalRestrictions,
+      flags: resolved.flags,
+      source: "manual",
+      reason: reason.trim(),
+      createdAt: new Date().toISOString(),
+    });
+
+    const auditEntry = {
+      type: "manual_trigger",
+      userId: normalizedUserId,
+      admin: "Admin",
+      reason: reason.trim(),
+      actions: {
+        verification: resolved.verification,
+        restriction: resolved.restriction,
+        flags: resolved.flags,
+      },
+      timestamp: new Date().toISOString(),
+    };
+    try {
+      const currentRaw = window.localStorage.getItem(AUDIT_LOG_KEY);
+      const current = currentRaw ? (JSON.parse(currentRaw) as unknown[]) : [];
+      window.localStorage.setItem(
+        AUDIT_LOG_KEY,
+        JSON.stringify([auditEntry, ...current])
+      );
+    } catch {
+      // ignore localStorage errors in prototype mode
     }
+
+    setSuccessMessage("Manual trigger resolved, audited, and one case created.");
 
     setUserId("");
     setUsername("");
+    setReason("");
+    setActionType("KYC");
     setVerificationRequired([]);
     setRestrictions([]);
+    setFlags([]);
   };
 
   return (
@@ -123,48 +188,114 @@ export default function ManualTriggerPage() {
           </div>
         </div>
 
+        <div className="space-y-1">
+          <label htmlFor="reason" className="text-sm font-medium text-slate-700">
+            Reason *
+          </label>
+          <textarea
+            id="reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            required
+            rows={3}
+            placeholder="Why is this manual trigger needed?"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="actionType" className="text-sm font-medium text-slate-700">
+            Action Type
+          </label>
+          <select
+            id="actionType"
+            value={actionType}
+            onChange={(event) =>
+              setActionType(event.target.value as "KYC" | "Restriction" | "Flag")
+            }
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+          >
+            <option value="KYC">KYC</option>
+            <option value="Restriction">Restriction</option>
+            <option value="Flag">Flag</option>
+          </select>
+        </div>
+
         <section className="space-y-2">
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-            Verification Required
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {verificationOptions.map((option) => (
-              <label
-                key={option}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-              >
-                <input
-                  type="checkbox"
-                  checked={verificationRequired.includes(option)}
-                  onChange={() => toggleVerification(option)}
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                />
-                {option}
-              </label>
-            ))}
-          </div>
+          {actionType === "KYC" ? (
+            <>
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Verification Required
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {verificationOptions
+                  .filter((item) => item !== "Proof")
+                  .map((option) => (
+                    <label
+                      key={option}
+                      className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={verificationRequired.includes(option)}
+                        onChange={() => toggleVerification(option)}
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                      />
+                      {option}
+                    </label>
+                  ))}
+              </div>
+            </>
+          ) : null}
         </section>
 
         <section className="space-y-2">
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-            Restrictions
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {restrictionOptions.map((option) => (
-              <label
-                key={option}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-              >
-                <input
-                  type="checkbox"
-                  checked={restrictions.includes(option)}
-                  onChange={() => toggleRestriction(option)}
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                />
-                {option}
-              </label>
-            ))}
-          </div>
+          {actionType === "Restriction" ? (
+            <>
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Restrictions
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {restrictionOptions.map((option) => (
+                  <label
+                    key={option}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={restrictions.includes(option)}
+                      onChange={() => toggleRestriction(option)}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {actionType === "Flag" ? (
+            <>
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Flags
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {flagOptions.map((option) => (
+                  <label
+                    key={option}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={flags.includes(option)}
+                      onChange={() => toggleFlag(option)}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : null}
         </section>
 
         <div className="flex items-center gap-3">

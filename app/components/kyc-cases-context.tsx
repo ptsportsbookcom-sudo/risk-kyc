@@ -26,7 +26,11 @@ export type KycCase = {
   verificationRequired: VerificationType[];
   status: ReviewStatus;
   createdDate: string;
+  createdAt?: string;
+  source?: "manual" | "simulation";
+  reason?: string;
   restrictions: string[];
+  flags?: string[];
   documents: KycDocument[];
 };
 
@@ -35,6 +39,10 @@ type CreateKycCaseInput = {
   username: string;
   verificationRequired: VerificationType[];
   restrictions: string[];
+  flags?: string[];
+  source?: "manual" | "simulation";
+  reason?: string;
+  createdAt?: string;
 };
 
 type KycCasesContextValue = {
@@ -144,7 +152,11 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         verificationRequired: input.verificationRequired,
         status: "Pending",
         createdDate,
+        createdAt: input.createdAt ?? now.toISOString(),
+        source: input.source ?? "simulation",
+        reason: input.reason,
         restrictions: input.restrictions,
+        flags: input.flags ?? [],
         documents: [],
       },
       ...currentCases,

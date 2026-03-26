@@ -166,7 +166,7 @@ export default function ReviewPage() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRows.map((row) => {
                 const player = getPlayerById(row.userId);
-                const playerRestrictions = player?.restrictions ?? [];
+                const resolvedRestrictions = row.restrictions ?? [];
                 return (
                 <tr
                   key={row.id}
@@ -177,10 +177,22 @@ export default function ReviewPage() {
                     {row.userId}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.username}
+                    <div className="flex items-center gap-2">
+                      <span>{row.username}</span>
+                      {row.source === "manual" ? (
+                        <span className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                          Manual
+                        </span>
+                      ) : null}
+                    </div>
+                    {row.reason ? (
+                      <p className="mt-1 text-xs text-slate-500">Reason: {row.reason}</p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.verificationRequired.join(", ")}
+                    {row.verificationRequired.length > 0
+                      ? row.verificationRequired[0]
+                      : "None"}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
                     {player?.kycLevel ?? "N/A"}
@@ -198,9 +210,9 @@ export default function ReviewPage() {
                     {row.createdDate}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {playerRestrictions.length > 0 ? (
+                    {resolvedRestrictions.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {playerRestrictions.map((restriction) => (
+                        {resolvedRestrictions.map((restriction) => (
                           <span
                             key={restriction}
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(

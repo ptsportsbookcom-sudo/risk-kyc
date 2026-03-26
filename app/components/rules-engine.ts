@@ -39,6 +39,12 @@ export type RulesEngineResult = {
   };
 };
 
+export type AggregatedActionsInput = {
+  verifications: string[];
+  restrictions: string[];
+  flags: string[];
+};
+
 const verificationPriority: Record<string, number> = {
   ID: 1,
   Selfie: 2,
@@ -58,6 +64,25 @@ function pickHighestPriority(items: string[], priorityMap: Record<string, number
   return [...items].sort(
     (left, right) => (priorityMap[right] ?? 0) - (priorityMap[left] ?? 0)
   )[0];
+}
+
+export function resolveAggregatedActions(aggregatedActions: AggregatedActionsInput) {
+  return {
+    verification: pickHighestPriority(
+      aggregatedActions.verifications,
+      verificationPriority
+    ),
+    restriction: pickHighestPriority(
+      aggregatedActions.restrictions,
+      restrictionPriority
+    ),
+    flags: Array.from(new Set(aggregatedActions.flags)),
+    aggregatedActions: {
+      verifications: Array.from(new Set(aggregatedActions.verifications)),
+      restrictions: Array.from(new Set(aggregatedActions.restrictions)),
+      flags: Array.from(new Set(aggregatedActions.flags)),
+    },
+  };
 }
 
 function evaluateOperator(left: number | string, operator: string, rightRaw: string) {
@@ -187,18 +212,13 @@ export function runRulesEngine({
     flags: Array.from(flagSet),
   };
 
+  const resolved = resolveAggregatedActions(aggregatedActions);
   const finalDecision = {
-    verification: pickHighestPriority(
-      aggregatedActions.verifications,
-      verificationPriority
-    ),
-    restriction: pickHighestPriority(
-      aggregatedActions.restrictions,
-      restrictionPriority
-    ),
-    flags: aggregatedActions.flags,
+    verification: resolved.verification,
+    restriction: resolved.restriction,
+    flags: resolved.flags,
     triggeredRules,
-    aggregatedActions,
+    aggregatedActions: resolved.aggregatedActions,
   };
 
   return {
