@@ -38,12 +38,22 @@ const withdrawalConditionOptions: Extract<
   ConditionType,
   "Single withdrawal" | "Number of withdrawals" | "Lifetime withdrawal"
 >[] = ["Single withdrawal", "Number of withdrawals", "Lifetime withdrawal"];
+const betPlacementConditionOptions: Extract<
+  ConditionType,
+  "Bet amount >" | "Odds >"
+>[] = ["Bet amount >", "Odds >"];
+const flagOptions = [
+  "High Bet Amount",
+  "Live Bet Risk",
+  "High Odds Risk",
+  "Bet Velocity",
+];
 
 function getDefaultConditionType(eventType: EventType): ConditionType {
   if (eventType === "Deposit") return "Single deposit";
   if (eventType === "Withdrawal") return "Single withdrawal";
   if (eventType === "Bonus") return "Number of bonuses used";
-  if (eventType === "Bet") return "Bet count";
+  if (eventType === "Bet Placement") return "Bet amount >";
   return "Country/State";
 }
 
@@ -60,6 +70,8 @@ export default function RulesPage() {
     VerificationType[]
   >([]);
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
+  const [flags, setFlags] = useState<string[]>([]);
+  const [isLiveOnly, setIsLiveOnly] = useState(false);
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
@@ -77,10 +89,19 @@ export default function RulesPage() {
     );
   };
 
+  const toggleFlag = (value: string) => {
+    setFlags((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    );
+  };
+
   const onEventTypeChange = (nextEventType: EventType) => {
     setEventType(nextEventType);
     setConditionType(getDefaultConditionType(nextEventType));
     setConditionValue("");
+    setIsLiveOnly(false);
   };
 
   const onSaveRule = (event: FormEvent<HTMLFormElement>) => {
@@ -93,12 +114,15 @@ export default function RulesPage() {
       eventType,
       conditionType,
       conditionValue: resolvedConditionValue || "N/A",
+      isLiveOnly: eventType === "Bet Placement" ? isLiveOnly : undefined,
       verificationRequired,
       restrictions,
+      flags,
     });
     setConditionValue("");
     setVerificationRequired([]);
     setRestrictions([]);
+    setFlags([]);
     onEventTypeChange("Registration");
   };
 
@@ -124,7 +148,7 @@ export default function RulesPage() {
               <option value="Deposit">Deposit</option>
               <option value="Withdrawal">Withdrawal</option>
               <option value="Bonus">Bonus</option>
-              <option value="Bet">Bet</option>
+              <option value="Bet Placement">Bet Placement</option>
             </select>
           </section>
 
@@ -257,19 +281,50 @@ export default function RulesPage() {
               </div>
             ) : null}
 
-            {eventType === "Bet" ? (
-              <div className="max-w-sm space-y-1">
-                <label className="text-sm font-medium text-slate-700">
-                  Bet count
+            {eventType === "Bet Placement" ? (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700">
+                      Condition type
+                    </label>
+                    <select
+                      value={conditionType}
+                      onChange={(event) =>
+                        setConditionType(event.target.value as ConditionType)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    >
+                      {betPlacementConditionOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700">
+                      Value
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={conditionValue}
+                      onChange={(event) => setConditionValue(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    />
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isLiveOnly}
+                    onChange={(event) => setIsLiveOnly(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  isLive only
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={conditionValue}
-                  onChange={(event) => setConditionValue(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                />
               </div>
             ) : null}
           </section>
@@ -288,6 +343,28 @@ export default function RulesPage() {
                     type="checkbox"
                     checked={verificationRequired.includes(option)}
                     onChange={() => toggleVerification(option)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  {option}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              5. Flags
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {flagOptions.map((option) => (
+                <label
+                  key={option}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={flags.includes(option)}
+                    onChange={() => toggleFlag(option)}
                     className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                   />
                   {option}
@@ -348,6 +425,7 @@ export default function RulesPage() {
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Condition: {rule.conditionType} = {rule.conditionValue}
+                  {rule.isLiveOnly ? " (Live Only)" : ""}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Verification:{" "}
@@ -360,6 +438,9 @@ export default function RulesPage() {
                   {rule.restrictions.length > 0
                     ? rule.restrictions.join(", ")
                     : "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Flags: {rule.flags.length > 0 ? rule.flags.join(", ") : "None"}
                 </p>
               </article>
             ))}

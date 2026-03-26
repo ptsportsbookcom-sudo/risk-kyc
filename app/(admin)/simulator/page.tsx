@@ -30,13 +30,31 @@ export default function SimulatorPage() {
   const [state, setState] = useState("California");
   const [amount, setAmount] = useState("");
   const [count, setCount] = useState("");
+  const [betAmount, setBetAmount] = useState("");
+  const [odds, setOdds] = useState("");
+  const [isLive, setIsLive] = useState(false);
   const [result, setResult] = useState<SimulationResult>(initialResult);
 
   const isRuleMatched = (
     rule: Rule,
-    simulation: { eventType: EventType; amount: number; count: number }
+    simulation: {
+      eventType: EventType;
+      amount: number;
+      count: number;
+      betAmount: number;
+      odds: number;
+      isLive: boolean;
+    }
   ) => {
     if (rule.eventType !== simulation.eventType) {
+      return false;
+    }
+
+    if (
+      rule.eventType === "Bet Placement" &&
+      rule.isLiveOnly &&
+      !simulation.isLive
+    ) {
       return false;
     }
 
@@ -56,6 +74,14 @@ export default function SimulatorPage() {
       return simulation.amount >= numericValue;
     }
 
+    if (rule.conditionType === "Bet amount >") {
+      return simulation.betAmount >= numericValue;
+    }
+
+    if (rule.conditionType === "Odds >") {
+      return simulation.odds >= numericValue;
+    }
+
     return simulation.count >= numericValue;
   };
 
@@ -66,6 +92,9 @@ export default function SimulatorPage() {
       eventType,
       amount: Number(amount || 0),
       count: Number(count || 0),
+      betAmount: Number(betAmount || 0),
+      odds: Number(odds || 0),
+      isLive,
     };
 
     const matchedRules = rules.filter((rule) => isRuleMatched(rule, simulation));
@@ -90,6 +119,7 @@ export default function SimulatorPage() {
         username: normalizedUsername,
         verificationRequired: rule.verificationRequired,
         restrictions: rule.restrictions,
+        flags: rule.flags,
       });
 
       if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
@@ -188,7 +218,7 @@ export default function SimulatorPage() {
                 <option value="Deposit">Deposit</option>
                 <option value="Withdrawal">Withdrawal</option>
                 <option value="Bonus">Bonus</option>
-                <option value="Bet">Bet</option>
+                <option value="Bet Placement">Bet Placement</option>
               </select>
             </div>
 
@@ -243,6 +273,46 @@ export default function SimulatorPage() {
               />
             </div>
           )}
+
+          {eventType === "Bet Placement" ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">
+                  betAmount
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={betAmount}
+                  onChange={(event) => setBetAmount(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700">odds</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={odds}
+                  onChange={(event) => setOdds(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="inline-flex items-center gap-2 pt-8 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isLive}
+                    onChange={(event) => setIsLive(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  isLive
+                </label>
+              </div>
+            </div>
+          ) : null}
 
           <div>
             <button

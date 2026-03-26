@@ -14,7 +14,7 @@ export type EventType =
   | "Deposit"
   | "Withdrawal"
   | "Bonus"
-  | "Bet";
+  | "Bet Placement";
 export type ConditionType =
   | "Country/State"
   | "Single deposit"
@@ -24,15 +24,18 @@ export type ConditionType =
   | "Number of withdrawals"
   | "Lifetime withdrawal"
   | "Number of bonuses used"
-  | "Bet count";
+  | "Bet amount >"
+  | "Odds >";
 
 export type Rule = {
   id: string;
   eventType: EventType;
   conditionType: ConditionType;
   conditionValue: string;
+  isLiveOnly?: boolean;
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];
+  flags: string[];
 };
 
 type CreateRuleInput = Omit<Rule, "id">;
