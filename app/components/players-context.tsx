@@ -5,11 +5,17 @@ import { RestrictionType } from "@/app/components/rules-context";
 import { VerificationType } from "@/app/components/kyc-cases-context";
 
 export type KycLevel = "L0" | "L1" | "L2" | "L3";
+export type PlayerLimits = {
+  maxDeposit: number | null;
+  canWithdraw: boolean;
+  canPlayCasino: boolean;
+};
 
 export type Player = {
   id: string;
   username: string;
   kycLevel: KycLevel;
+  limits: PlayerLimits;
   restrictions: RestrictionType[];
   flags: string[];
 };
@@ -57,6 +63,30 @@ export function getRequiredLevel(verificationRequired: VerificationType[]): KycL
   return "L1";
 }
 
+export function getLimitsForLevel(kycLevel: KycLevel): PlayerLimits {
+  if (kycLevel === "L3") {
+    return {
+      maxDeposit: null,
+      canWithdraw: true,
+      canPlayCasino: true,
+    };
+  }
+
+  if (kycLevel === "L2") {
+    return {
+      maxDeposit: 1000,
+      canWithdraw: true,
+      canPlayCasino: true,
+    };
+  }
+
+  return {
+    maxDeposit: 100,
+    canWithdraw: false,
+    canPlayCasino: true,
+  };
+}
+
 const PlayersContext = createContext<PlayersContextValue | undefined>(undefined);
 
 export function PlayersProvider({ children }: { children: ReactNode }) {
@@ -73,7 +103,15 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       }
 
       const parsedPlayers = JSON.parse(savedPlayers) as Player[];
-      setPlayers(Array.isArray(parsedPlayers) ? parsedPlayers : []);
+      const normalizedPlayers = Array.isArray(parsedPlayers)
+        ? parsedPlayers.map((player) => ({
+            ...player,
+            limits: getLimitsForLevel(player.kycLevel),
+            restrictions: Array.isArray(player.restrictions) ? player.restrictions : [],
+            flags: Array.isArray(player.flags) ? player.flags : [],
+          }))
+        : [];
+      setPlayers(normalizedPlayers);
     } catch {
       setPlayers([]);
     } finally {
@@ -95,6 +133,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       id: input.id,
       username: input.username,
       kycLevel: "L0",
+      limits: getLimitsForLevel("L0"),
       restrictions: [],
       flags: [],
     };
@@ -117,6 +156,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       ...current,
       username: input.username || current.username,
       kycLevel: nextLevel,
+      limits: getLimitsForLevel(nextLevel),
       restrictions: mergedRestrictions,
       flags: mergedFlags,
     };
