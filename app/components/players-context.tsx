@@ -16,6 +16,7 @@ export type Player = {
   username: string;
   kycLevel: KycLevel;
   limits: PlayerLimits;
+  restriction: RestrictionType | null;
   restrictions: RestrictionType[];
   flags: string[];
   deviceCount: number;
@@ -126,6 +127,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
         ? parsedPlayers.map((player) => ({
             ...player,
             limits: getLimitsForLevel(player.kycLevel),
+            restriction: (player.restriction as RestrictionType | null) ?? null,
             restrictions: Array.isArray(player.restrictions) ? player.restrictions : [],
             flags: Array.isArray(player.flags) ? player.flags : [],
             deviceCount: Number(player.deviceCount ?? 1),
@@ -163,6 +165,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       username: input.username,
       kycLevel: "L0",
       limits: getLimitsForLevel("L0"),
+      restriction: null,
       restrictions: [],
       flags: [],
       deviceCount: 1,
@@ -196,6 +199,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       username: input.username || current.username,
       kycLevel: nextLevel,
       limits: getLimitsForLevel(nextLevel),
+      restriction: input.restrictions[0] ?? current.restriction,
       restrictions: mergedRestrictions,
       flags: mergedFlags,
       deviceCount: input.playerSnapshot?.deviceCount ?? current.deviceCount,

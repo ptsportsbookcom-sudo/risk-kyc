@@ -7,6 +7,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -35,6 +36,7 @@ function restrictionClass(restriction: string) {
 export default function ReviewPage() {
   const router = useRouter();
   const { cases, updateCaseStatus } = useKycCases();
+  const { getPlayerById } = usePlayers();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
     "All" | VerificationType
@@ -163,7 +165,8 @@ export default function ReviewPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRows.map((row) => {
-                const resolvedRestrictions = row.restrictions ?? [];
+                const player = getPlayerById(row.userId);
+                const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? null;
                 return (
                 <tr
                   key={row.id}
@@ -207,19 +210,14 @@ export default function ReviewPage() {
                     {row.createdDate}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {resolvedRestrictions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {resolvedRestrictions.map((restriction) => (
-                          <span
-                            key={restriction}
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(
-                              restriction
-                            )}`}
-                          >
-                            {restriction}
-                          </span>
-                        ))}
-                      </div>
+                    {resolvedRestriction ? (
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(
+                          resolvedRestriction
+                        )}`}
+                      >
+                        Restriction: {resolvedRestriction}
+                      </span>
                     ) : (
                       <span className="text-slate-500">None</span>
                     )}

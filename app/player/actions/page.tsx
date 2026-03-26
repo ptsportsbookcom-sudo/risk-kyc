@@ -3,10 +3,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { canUserPerformAction } from "@/app/components/enforcement";
 import { useKycCases } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+import { RestrictionType } from "@/app/components/rules-context";
 
 type PlayerAction = "Deposit" | "Withdraw" | "Play Casino";
+const restrictionValues: RestrictionType[] = [
+  "Deposit Block",
+  "Withdrawal Block",
+  "Casino Block",
+  "Full Account Block",
+];
+
+function toRestrictionType(value: string | null | undefined): RestrictionType | null {
+  if (!value) return null;
+  return restrictionValues.includes(value as RestrictionType)
+    ? (value as RestrictionType)
+    : null;
+}
 
 export default function PlayerActionsPage() {
   const router = useRouter();
@@ -17,12 +32,13 @@ export default function PlayerActionsPage() {
 
   const pendingCase = cases.find((item) => item.status === "Pending");
   const player = pendingCase ? getPlayerById(pendingCase.userId) : undefined;
-  const restrictions = player?.restrictions ?? pendingCase?.restrictions ?? [];
+  const restriction: RestrictionType | null =
+    player?.restriction ?? toRestrictionType(pendingCase?.restrictions?.[0]);
 
   const tryAction = (action: PlayerAction) => {
     setMessage("");
 
-    if (action === "Withdraw" && restrictions.includes("Withdrawal Block")) {
+    if (!canUserPerformAction({ restriction }, "withdrawal") && action === "Withdraw") {
       setMessage("Action blocked: Complete verification to withdraw.");
       router.push(
         "/player?reason=Complete%20verification%20to%20withdraw"
@@ -30,13 +46,13 @@ export default function PlayerActionsPage() {
       return;
     }
 
-    if (action === "Deposit" && restrictions.includes("Deposit Block")) {
+    if (!canUserPerformAction({ restriction }, "deposit") && action === "Deposit") {
       setMessage("Action blocked: Complete verification to deposit.");
       router.push("/player?reason=Complete%20verification%20to%20deposit");
       return;
     }
 
-    if (action === "Play Casino" && restrictions.includes("Casino Block")) {
+    if (!canUserPerformAction({ restriction }, "casino") && action === "Play Casino") {
       setMessage("Action blocked: Complete verification to play casino.");
       router.push("/player?reason=Complete%20verification%20to%20play%20casino");
       return;

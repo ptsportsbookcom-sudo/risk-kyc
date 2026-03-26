@@ -5,6 +5,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
+import { canUserPerformAction } from "@/app/components/enforcement";
 import { runRulesEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
 import { EventType, RestrictionType, useRules } from "@/app/components/rules-context";
@@ -21,6 +22,7 @@ type SimulationResult = {
   finalRestriction: string;
   finalFlags: string;
   detectedFraudSignals: string;
+  activeRestriction: string;
 };
 
 const initialResult: SimulationResult = {
@@ -35,6 +37,7 @@ const initialResult: SimulationResult = {
   finalRestriction: "None",
   finalFlags: "None",
   detectedFraudSignals: "None",
+  activeRestriction: "None",
 };
 
 export default function SimulatorPage() {
@@ -59,6 +62,7 @@ export default function SimulatorPage() {
   const [odds, setOdds] = useState("");
   const [isLive, setIsLive] = useState(false);
   const [result, setResult] = useState<SimulationResult>(initialResult);
+  const [actionCheckResult, setActionCheckResult] = useState("");
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -135,7 +139,9 @@ export default function SimulatorPage() {
           engineResult.detectedFraudSignals.length > 0
             ? engineResult.detectedFraudSignals.join(", ")
             : "None",
+        activeRestriction: engineResult.finalDecision.restriction ?? "None",
       });
+      setActionCheckResult("");
       return;
     }
 
@@ -215,7 +221,22 @@ export default function SimulatorPage() {
         engineResult.detectedFraudSignals.length > 0
           ? engineResult.detectedFraudSignals.join(", ")
           : "None",
+      activeRestriction: engineResult.finalDecision.restriction ?? "None",
     });
+    setActionCheckResult("");
+  };
+
+  const tryAction = (action: "deposit" | "withdrawal" | "casino") => {
+    const restriction =
+      result.activeRestriction !== "None"
+        ? (result.activeRestriction as RestrictionType)
+        : null;
+    const allowed = canUserPerformAction({ restriction }, action);
+    setActionCheckResult(
+      allowed
+        ? "Allowed"
+        : `Blocked due to ${restriction ?? "restriction"}`
+    );
   };
 
   return (
@@ -472,6 +493,39 @@ export default function SimulatorPage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <ResultItem label="Triggered action" value={result.triggeredAction} />
           <ResultItem label="Created case status" value={result.createdCaseStatus} />
+          <ResultItem label="Active Restriction" value={result.activeRestriction} />
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Enforcement Test
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => tryAction("deposit")}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+            >
+              Try Deposit
+            </button>
+            <button
+              type="button"
+              onClick={() => tryAction("withdrawal")}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+            >
+              Try Withdrawal
+            </button>
+            <button
+              type="button"
+              onClick={() => tryAction("casino")}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+            >
+              Try Casino
+            </button>
+          </div>
+          {actionCheckResult ? (
+            <p className="mt-2 text-sm font-medium text-slate-700">{actionCheckResult}</p>
+          ) : null}
         </div>
 
         <div className="mt-4">
