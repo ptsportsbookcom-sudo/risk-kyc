@@ -22,7 +22,7 @@ const initialResult: SimulationResult = {
 export default function SimulatorPage() {
   const { rules } = useRules();
   const { addCase } = useKycCases();
-  const { applyTriggerToPlayer } = usePlayers();
+  const { applyTriggerToPlayer, getPlayerById } = usePlayers();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
@@ -43,13 +43,13 @@ export default function SimulatorPage() {
       withdrawalAmount: number;
       count: number;
       country: string;
-      state: string;
+      kycLevel: string;
       betAmount: number;
       odds: number;
       isLive: boolean;
     }
   ) => {
-    if (rule.eventType !== simulation.eventType) {
+    if (rule.eventType !== "ANY" && rule.eventType !== simulation.eventType) {
       return false;
     }
 
@@ -75,7 +75,7 @@ export default function SimulatorPage() {
     };
 
     const inferCategoryFromField = (field: string) => {
-      if (field === "country" || field === "state") return "Player";
+      if (field === "country" || field === "kycLevel" || field === "state") return "Player";
       if (field === "depositAmount" || field === "withdrawalAmount") return "Transaction";
       if (field === "bonusesUsed") return "Bonus";
       if (field === "betAmount" || field === "odds") return "Betting";
@@ -121,7 +121,8 @@ export default function SimulatorPage() {
         else if (condition.field === "withdrawalAmount") left = simulation.withdrawalAmount;
       } else if (category === "Player") {
         if (condition.field === "country") left = simulation.country;
-        else if (condition.field === "state") left = simulation.state;
+        else if (condition.field === "kycLevel") left = simulation.kycLevel;
+        else if (condition.field === "state") left = "";
       } else if (category === "Bonus") {
         if (condition.field === "bonusesUsed") left = simulation.count;
       } else if (category === "Betting") {
@@ -156,22 +157,23 @@ export default function SimulatorPage() {
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
+    const normalizedUsername = username.trim() || "simulated_user";
+    const existingPlayer = getPlayerById(normalizedUserId);
+
     const simulation = {
       eventType,
       depositAmount: Number(amount || 0),
       withdrawalAmount: Number(amount || 0),
       count: Number(count || 0),
       country,
-      state,
+      kycLevel: existingPlayer?.kycLevel ?? "L0",
       betAmount: Number(betAmount || 0),
       odds: Number(odds || 0),
       isLive,
     };
 
     const matchedRules = rules.filter((rule) => isRuleMatched(rule, simulation));
-
-    const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
-    const normalizedUsername = username.trim() || "simulated_user";
 
     if (matchedRules.length === 0) {
       setResult({

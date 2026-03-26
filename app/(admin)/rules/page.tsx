@@ -33,33 +33,19 @@ const flagOptions = [
 ];
 
 function getAllowedCategories(triggerEvent: EventType): RuleConditionCategory[] {
-  if (triggerEvent === "Registration") return ["Player"];
-  if (triggerEvent === "Bet Placement") return ["Player", "Bonus", "Betting", "Risk"];
-  if (triggerEvent === "Deposit") return ["Transaction", "Player", "Bonus"];
-  if (triggerEvent === "Withdrawal") return ["Transaction", "Player", "Bonus"];
-  // Bonus Activation
-  return ["Player", "Bonus"];
+  void triggerEvent;
+  return ["Transaction", "Player", "Bonus", "Betting"];
 }
 
 function getAllowedFieldsForCategory(
   triggerEvent: EventType,
   category: RuleConditionCategory
 ): RuleField[] {
-  if (category === "Player") return ["country", "state"];
-  if (category === "Transaction") {
-    if (triggerEvent === "Deposit") return ["depositAmount"];
-    if (triggerEvent === "Withdrawal") return ["withdrawalAmount"];
-    return [];
-  }
+  void triggerEvent;
+  if (category === "Player") return ["country", "kycLevel"];
+  if (category === "Transaction") return ["depositAmount", "withdrawalAmount"];
   if (category === "Bonus") return ["bonusesUsed"];
-  if (category === "Betting") {
-    if (triggerEvent === "Bet Placement") return ["betAmount", "odds"];
-    return [];
-  }
-  if (category === "Risk") {
-    if (triggerEvent === "Bet Placement") return ["isLive"];
-    return [];
-  }
+  if (category === "Betting") return ["betAmount", "odds"];
   return [];
 }
 
@@ -76,7 +62,7 @@ function getDefaultConditionForEvent(triggerEvent: EventType) {
   const fields = getAllowedFieldsForCategory(triggerEvent, defaultCategory);
   const defaultField = fields[0] ?? "country";
   const defaultOperator: RuleOperator =
-    defaultField === "country" || defaultField === "state" ? "==" : ">";
+    defaultField === "country" || defaultField === "kycLevel" ? "==" : ">";
 
   return {
     category: defaultCategory as RuleConditionCategory,
@@ -202,9 +188,7 @@ export default function RulesPage() {
           const key = `${category}-${field}`;
           if (usedKeys.has(key)) continue;
           const defaultOperator: RuleOperator =
-            field === "country" || field === "state" || field === "isLive"
-              ? "=="
-              : ">";
+            field === "country" || field === "kycLevel" ? "==" : ">";
           return [
             ...current,
             {
@@ -336,6 +320,7 @@ export default function RulesPage() {
               onChange={(event) => onEventTypeChange(event.target.value as EventType)}
               className="w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
             >
+              <option value="ANY">ANY event</option>
               <option value="Registration">Registration</option>
               <option value="Deposit">Deposit</option>
               <option value="Withdrawal">Withdrawal</option>
@@ -476,8 +461,7 @@ export default function RulesPage() {
                               const nextField = nextFields[0] ?? condition.field;
                               const nextOperator: RuleOperator =
                                 nextField === "country" ||
-                                nextField === "state" ||
-                                nextField === "isLive"
+                                nextField === "kycLevel"
                                   ? "=="
                                   : ">";
                               updateConditionRow(groupIndex, {
@@ -503,8 +487,7 @@ export default function RulesPage() {
                                 event.target.value as RuleField;
                               const nextOperator: RuleOperator =
                                 nextField === "country" ||
-                                nextField === "state" ||
-                                nextField === "isLive"
+                                nextField === "kycLevel"
                                   ? "=="
                                   : ">";
                               updateConditionRow(groupIndex, {
@@ -626,8 +609,7 @@ export default function RulesPage() {
                                   const nextField = nextFields[0] ?? condition.field;
                                   const nextOperator: RuleOperator =
                                     nextField === "country" ||
-                                    nextField === "state" ||
-                                    nextField === "isLive"
+                                    nextField === "kycLevel"
                                       ? "=="
                                       : ">";
                                   updateConditionRow(0, {
@@ -653,8 +635,7 @@ export default function RulesPage() {
                                     event.target.value as RuleField;
                                   const nextOperator: RuleOperator =
                                     nextField === "country" ||
-                                    nextField === "state" ||
-                                    nextField === "isLive"
+                                    nextField === "kycLevel"
                                       ? "=="
                                       : ">";
                                   updateConditionRow(0, {
@@ -804,8 +785,7 @@ export default function RulesPage() {
                                   const nextField = nextFields[0] ?? condition.field;
                                   const nextOperator: RuleOperator =
                                     nextField === "country" ||
-                                    nextField === "state" ||
-                                    nextField === "isLive"
+                                    nextField === "kycLevel"
                                       ? "=="
                                       : ">";
                                   updateConditionRow(groupIndex, {
@@ -831,8 +811,7 @@ export default function RulesPage() {
                                     event.target.value as RuleField;
                                   const nextOperator: RuleOperator =
                                     nextField === "country" ||
-                                    nextField === "state" ||
-                                    nextField === "isLive"
+                                    nextField === "kycLevel"
                                       ? "=="
                                       : ">";
                                   updateConditionRow(groupIndex, {

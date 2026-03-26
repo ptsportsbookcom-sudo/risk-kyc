@@ -10,6 +10,7 @@ export type RestrictionType =
   | "Full Account Block";
 
 export type EventType =
+  | "ANY"
   | "Registration"
   | "Deposit"
   | "Withdrawal"
@@ -17,6 +18,7 @@ export type EventType =
   | "Bet Placement";
 export type RuleField =
   | "country"
+  | "kycLevel"
   | "state"
   | "depositAmount"
   | "withdrawalAmount"
@@ -31,8 +33,7 @@ export type RuleConditionCategory =
   | "Transaction"
   | "Player"
   | "Bonus"
-  | "Betting"
-  | "Risk";
+  | "Betting";
 
 export type RuleCondition = {
   // Optional for backward compatibility with previously-saved rules.
