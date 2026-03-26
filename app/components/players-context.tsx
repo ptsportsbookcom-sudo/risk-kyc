@@ -43,14 +43,18 @@ const levelRank: Record<KycLevel, number> = {
   L3: 3,
 };
 
-function getRequiredLevel(verificationRequired: VerificationType[]): KycLevel {
+export function getRequiredLevel(verificationRequired: VerificationType[]): KycLevel {
   if (verificationRequired.includes("Full KYC")) {
     return "L3";
   }
-  if (verificationRequired.includes("ID")) {
+  if (
+    verificationRequired.includes("ID") ||
+    verificationRequired.includes("Selfie") ||
+    verificationRequired.includes("Proof")
+  ) {
     return "L2";
   }
-  return "L0";
+  return "L1";
 }
 
 const PlayersContext = createContext<PlayersContextValue | undefined>(undefined);
