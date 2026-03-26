@@ -102,9 +102,13 @@ function formatRestrictionLabel(option: string) {
 
 export default function RulesPage() {
   const { rules, addRule } = useRules();
+  const [ruleName, setRuleName] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
   const [ruleMode, setRuleMode] = useState<"Simple" | "Advanced">("Simple");
   const [betweenGroupsLogic, setBetweenGroupsLogic] = useState<RuleLogic>("ALL");
+  const [priority, setPriority] = useState("100");
+  const [enabled, setEnabled] = useState(true);
+  const [stopProcessing, setStopProcessing] = useState(false);
 
   type ConditionRow = {
     category: RuleConditionCategory;
@@ -233,11 +237,20 @@ export default function RulesPage() {
     const primaryCondition = flattenedConditions[0];
 
     addRule({
+      name: ruleName.trim() || `Rule ${Date.now()}`,
       eventType,
       conditions: flattenedConditions,
       conditionLogic: betweenGroupsLogic,
       conditionGroups: normalizedGroups,
       groupLogic: betweenGroupsLogic,
+      actions: {
+        verifications: verificationRequired,
+        restrictions,
+        flags,
+      },
+      priority: Number(priority || 100),
+      enabled,
+      stopProcessing,
       field: primaryCondition.field,
       operator: primaryCondition.operator,
       value: primaryCondition.value,
@@ -251,6 +264,10 @@ export default function RulesPage() {
     setRestrictions([]);
     setFlags([]);
     setIsLiveOnly(false);
+    setRuleName("");
+    setPriority("100");
+    setEnabled(true);
+    setStopProcessing(false);
 
     setRuleMode("Simple");
     setBetweenGroupsLogic("ALL");
@@ -327,6 +344,50 @@ export default function RulesPage() {
               <option value="Bonus">Bonus Activation</option>
               <option value="Bet Placement">Bet Placement</option>
             </select>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              1. Rule Settings
+            </h4>
+            <div className="grid gap-3 md:grid-cols-3">
+              <input
+                type="text"
+                value={ruleName}
+                onChange={(event) => setRuleName(event.target.value)}
+                placeholder="Rule name"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={priority}
+                onChange={(event) => setPriority(event.target.value)}
+                placeholder="Priority (default 100)"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+              <div className="flex items-center gap-4 rounded-lg border border-slate-300 px-3 py-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(event) => setEnabled(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  Enabled
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={stopProcessing}
+                    onChange={(event) => setStopProcessing(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  Stop Processing
+                </label>
+              </div>
+            </div>
           </section>
 
       <section className="space-y-2">
@@ -1023,7 +1084,12 @@ export default function RulesPage() {
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4"
               >
                 <p className="text-sm font-semibold text-slate-900">
-                  Event: {rule.eventType}
+                  {rule.name} - Event: {rule.eventType}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Priority: {rule.priority ?? 100} | Enabled:{" "}
+                  {rule.enabled === false ? "No" : "Yes"} | Stop Processing:{" "}
+                  {rule.stopProcessing ? "Yes" : "No"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Condition:{" "}
@@ -1051,18 +1117,21 @@ export default function RulesPage() {
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Verification:{" "}
-                  {rule.verificationRequired.length > 0
-                    ? rule.verificationRequired.join(", ")
+                  {(rule.actions?.verifications ?? rule.verificationRequired).length > 0
+                    ? (rule.actions?.verifications ?? rule.verificationRequired).join(", ")
                     : "None"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Restrictions:{" "}
-                  {rule.restrictions.length > 0
-                    ? rule.restrictions.join(", ")
+                  {(rule.actions?.restrictions ?? rule.restrictions).length > 0
+                    ? (rule.actions?.restrictions ?? rule.restrictions).join(", ")
                     : "None"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Flags: {rule.flags.length > 0 ? rule.flags.join(", ") : "None"}
+                  Flags:{" "}
+                  {(rule.actions?.flags ?? rule.flags).length > 0
+                    ? (rule.actions?.flags ?? rule.flags).join(", ")
+                    : "None"}
                 </p>
               </article>
             ))}

@@ -62,6 +62,7 @@ export type ConditionType =
 
 export type Rule = {
   id: string;
+  name: string;
   eventType: EventType;
   // Simple mode: flat list of conditions combined by conditionLogic.
   conditions?: RuleCondition[];
@@ -77,6 +78,15 @@ export type Rule = {
   conditionType?: ConditionType;
   conditionValue?: string;
   isLiveOnly?: boolean;
+  actions: {
+    verifications: VerificationType[];
+    restrictions: RestrictionType[];
+    flags: string[];
+  };
+  priority: number;
+  enabled: boolean;
+  stopProcessing: boolean;
+  // Backward compatibility mirrors
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];
   flags: string[];
@@ -95,10 +105,24 @@ export function RulesProvider({ children }: { children: ReactNode }) {
   const [rules, setRules] = useState<Rule[]>([]);
 
   const addRule = (input: CreateRuleInput) => {
+    const resolvedActions = input.actions ?? {
+      verifications: input.verificationRequired ?? [],
+      restrictions: input.restrictions ?? [],
+      flags: input.flags ?? [],
+    };
+
     setRules((currentRules) => [
       {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ...input,
+        name: input.name?.trim() || "Untitled Rule",
+        priority: input.priority ?? 100,
+        enabled: input.enabled ?? true,
+        stopProcessing: input.stopProcessing ?? false,
+        actions: resolvedActions,
+        verificationRequired: resolvedActions.verifications,
+        restrictions: resolvedActions.restrictions,
+        flags: resolvedActions.flags,
       },
       ...currentRules,
     ]);

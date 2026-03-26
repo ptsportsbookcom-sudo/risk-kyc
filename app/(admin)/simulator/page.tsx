@@ -2,21 +2,26 @@
 
 import { FormEvent, useState } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
+import { runRulesEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
-import { EventType, Rule, useRules } from "@/app/components/rules-context";
+import { EventType, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
   triggeredAction: string;
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
   createdCaseStatus: string;
   appliedRestriction: string;
   verificationRequired: string;
+  flags: string;
 };
 
 const initialResult: SimulationResult = {
   triggeredAction: "No action triggered yet",
+  triggeredRules: [],
   createdCaseStatus: "No case created",
   appliedRestriction: "None",
   verificationRequired: "None",
+  flags: "None",
 };
 
 export default function SimulatorPage() {
@@ -34,125 +39,6 @@ export default function SimulatorPage() {
   const [odds, setOdds] = useState("");
   const [isLive, setIsLive] = useState(false);
   const [result, setResult] = useState<SimulationResult>(initialResult);
-
-  const isRuleMatched = (
-    rule: Rule,
-    simulation: {
-      eventType: EventType;
-      depositAmount: number;
-      withdrawalAmount: number;
-      count: number;
-      country: string;
-      kycLevel: string;
-      betAmount: number;
-      odds: number;
-      isLive: boolean;
-    }
-  ) => {
-    if (rule.eventType !== "ANY" && rule.eventType !== simulation.eventType) {
-      return false;
-    }
-
-    if (
-      rule.eventType === "Bet Placement" &&
-      rule.isLiveOnly &&
-      !simulation.isLive
-    ) {
-      return false;
-    }
-
-    const legacyFieldMap: Record<string, { field: string; operator: string }> = {
-      "Country/State": { field: "country", operator: "==" },
-      "Single deposit": { field: "depositAmount", operator: ">" },
-      "Number of deposits": { field: "count", operator: ">" },
-      "Lifetime deposit": { field: "count", operator: ">" },
-      "Single withdrawal": { field: "withdrawalAmount", operator: ">" },
-      "Number of withdrawals": { field: "count", operator: ">" },
-      "Lifetime withdrawal": { field: "count", operator: ">" },
-      "Number of bonuses used": { field: "count", operator: ">" },
-      "Bet amount >": { field: "betAmount", operator: ">" },
-      "Odds >": { field: "odds", operator: ">" },
-    };
-
-    const inferCategoryFromField = (field: string) => {
-      if (field === "country" || field === "kycLevel" || field === "state") return "Player";
-      if (field === "depositAmount" || field === "withdrawalAmount") return "Transaction";
-      if (field === "bonusesUsed") return "Bonus";
-      if (field === "betAmount" || field === "odds") return "Betting";
-      if (field === "isLive") return "Risk";
-      return "Transaction";
-    };
-
-    const normalizedConditions =
-      rule.conditions && rule.conditions.length > 0
-        ? rule.conditions
-        : [
-            {
-              category: inferCategoryFromField(
-                (rule.field as string) ??
-                  legacyFieldMap[rule.conditionType ?? ""]?.field ??
-                  "count"
-              ),
-              field:
-                (rule.field as string) ??
-                legacyFieldMap[rule.conditionType ?? ""]?.field ??
-                "count",
-              operator:
-                rule.operator ??
-                legacyFieldMap[rule.conditionType ?? ""]?.operator ??
-                ">",
-              value: rule.value ?? rule.conditionValue ?? "0",
-            },
-          ];
-
-    const evaluateCondition = (condition: {
-      category?: string;
-      field: string;
-      operator: string;
-      value: string;
-    }) => {
-      const category = condition.category ?? inferCategoryFromField(condition.field);
-
-      let left: number | string | boolean | null = null;
-
-      // Category-aware mapping to simulation / player attributes.
-      if (category === "Transaction") {
-        if (condition.field === "depositAmount") left = simulation.depositAmount;
-        else if (condition.field === "withdrawalAmount") left = simulation.withdrawalAmount;
-      } else if (category === "Player") {
-        if (condition.field === "country") left = simulation.country;
-        else if (condition.field === "kycLevel") left = simulation.kycLevel;
-        else if (condition.field === "state") left = "";
-      } else if (category === "Bonus") {
-        if (condition.field === "bonusesUsed") left = simulation.count;
-      } else if (category === "Betting") {
-        if (condition.field === "betAmount") left = simulation.betAmount;
-        else if (condition.field === "odds") left = simulation.odds;
-      } else if (category === "Risk") {
-        if (condition.field === "isLive") left = simulation.isLive;
-      }
-
-      if (left === null) return false;
-
-      return evaluateOperator(left, condition.operator, condition.value);
-    };
-
-    if (rule.conditionGroups && rule.conditionGroups.length > 0) {
-      const groupPasses = rule.conditionGroups.map((group) =>
-        group.conditions.every((condition) => evaluateCondition(condition))
-      );
-
-      return (rule.groupLogic ?? "ALL") === "ANY"
-        ? groupPasses.some(Boolean)
-        : groupPasses.every(Boolean);
-    }
-
-    if ((rule.conditionLogic ?? "ALL") === "ANY") {
-      return normalizedConditions.some(evaluateCondition);
-    }
-
-    return normalizedConditions.every(evaluateCondition);
-  };
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,33 +59,50 @@ export default function SimulatorPage() {
       isLive,
     };
 
-    const matchedRules = rules.filter((rule) => isRuleMatched(rule, simulation));
+    const engineResult = runRulesEngine({
+      eventType,
+      playerData: {
+        depositAmount: simulation.depositAmount,
+        withdrawalAmount: simulation.withdrawalAmount,
+        bonusesUsed: simulation.count,
+        country: simulation.country,
+        kycLevel: simulation.kycLevel,
+        betAmount: simulation.betAmount,
+        odds: simulation.odds,
+      },
+      rules,
+    });
 
-    if (matchedRules.length === 0) {
+    if (engineResult.triggeredRules.length === 0) {
       setResult({
         triggeredAction: "No rule triggered",
+        triggeredRules: [],
         createdCaseStatus: "No case created",
         appliedRestriction: "None",
         verificationRequired: "None",
+        flags: "None",
       });
       return;
     }
 
     let createdCases = 0;
-    matchedRules.forEach((rule) => {
+    engineResult.triggeredRules.forEach((triggeredRule) => {
+      const rule = rules.find((item) => item.id === triggeredRule.id);
+      if (!rule) return;
+
       const triggerResult = applyTriggerToPlayer({
         id: normalizedUserId,
         username: normalizedUsername,
-        verificationRequired: rule.verificationRequired,
-        restrictions: rule.restrictions,
-        flags: rule.flags,
+        verificationRequired: rule.actions?.verifications ?? rule.verificationRequired,
+        restrictions: rule.actions?.restrictions ?? rule.restrictions,
+        flags: rule.actions?.flags ?? rule.flags,
       });
 
       if (triggerResult.levelChanged || triggerResult.newRestrictionsApplied) {
         addCase({
           userId: normalizedUserId,
           username: normalizedUsername,
-          verificationRequired: rule.verificationRequired,
+          verificationRequired: rule.actions?.verifications ?? rule.verificationRequired,
           restrictions: triggerResult.appliedRestrictions,
         });
         createdCases += 1;
@@ -207,27 +110,21 @@ export default function SimulatorPage() {
     });
 
     setResult({
-      triggeredAction: `${matchedRules.length} rule(s) triggered`,
+      triggeredAction: `${engineResult.triggeredRules.length} rule(s) triggered`,
+      triggeredRules: engineResult.triggeredRules,
       createdCaseStatus:
         createdCases > 0
           ? `${createdCases} case(s) created (Pending)`
           : "No case created",
-      appliedRestriction: (() => {
-        const uniqueRestrictions = Array.from(
-          new Set(matchedRules.flatMap((rule) => rule.restrictions))
-        );
-        return uniqueRestrictions.length > 0
-          ? uniqueRestrictions.join(", ")
-          : "None";
-      })(),
-      verificationRequired: (() => {
-        const uniqueVerifications = Array.from(
-          new Set(matchedRules.flatMap((rule) => rule.verificationRequired))
-        );
-        return uniqueVerifications.length > 0
-          ? uniqueVerifications.join(", ")
-          : "None";
-      })(),
+      appliedRestriction:
+        engineResult.restrictions.length > 0
+          ? engineResult.restrictions.join(", ")
+          : "None",
+      verificationRequired:
+        engineResult.verificationRequired.length > 0
+          ? engineResult.verificationRequired.join(", ")
+          : "None",
+      flags: engineResult.flags.length > 0 ? engineResult.flags.join(", ") : "None",
     });
   };
 
@@ -408,54 +305,31 @@ export default function SimulatorPage() {
             label="Verification required"
             value={result.verificationRequired}
           />
+          <ResultItem label="Flags" value={result.flags} />
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Triggered Rules
+          </p>
+          {result.triggeredRules.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">No rules triggered.</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {result.triggeredRules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                >
+                  {rule.name} (Priority {rule.priority})
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
-}
-
-function evaluateOperator(
-  left: number | string | boolean,
-  operator: string,
-  rightRaw: string
-) {
-  // String comparison
-  if (typeof left === "string") {
-    if (operator === "==") return left === rightRaw;
-    if (operator === "!=") return left !== rightRaw;
-    return false;
-  }
-
-  // Boolean comparison
-  if (typeof left === "boolean") {
-    const isTrueLike =
-      rightRaw.toLowerCase() === "true" ||
-      rightRaw.toLowerCase() === "1" ||
-      rightRaw.toLowerCase() === "yes";
-    const isFalseLike =
-      rightRaw.toLowerCase() === "false" ||
-      rightRaw.toLowerCase() === "0" ||
-      rightRaw.toLowerCase() === "no";
-
-    if (!isTrueLike && !isFalseLike) return false;
-    const right = isTrueLike ? true : false;
-
-    if (operator === "==") return left === right;
-    if (operator === "!=") return left !== right;
-    return false;
-  }
-
-  // Numeric comparison
-  const rightNum = Number(rightRaw);
-  if (Number.isNaN(rightNum)) return false;
-
-  if (operator === "==") return left === rightNum;
-  if (operator === "!=") return left !== rightNum;
-  if (operator === ">") return left > rightNum;
-  if (operator === ">=") return left >= rightNum;
-  if (operator === "<") return left < rightNum;
-  if (operator === "<=") return left <= rightNum;
-  return false;
 }
 
 function ResultItem({ label, value }: { label: string; value: string }) {
