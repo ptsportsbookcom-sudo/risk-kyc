@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { VerificationType } from "@/app/components/kyc-cases-context";
 import {
   EventType,
+  RuleConditionCategory,
   RuleField,
   RuleLogic,
   RuleOperator,
@@ -23,16 +24,7 @@ const restrictionOptions: RestrictionType[] = [
   "Casino Block",
   "Full Account Block",
 ];
-const countryOptions = ["United States", "Canada", "United Kingdom", "India"];
-const stateOptions = [
-  "California",
-  "New York",
-  "Texas",
-  "Ontario",
-  "London",
-  "Maharashtra",
-];
-const operatorOptions: RuleOperator[] = [">", ">=", "<", "<=", "=="];
+const operatorOptions: RuleOperator[] = [">", ">=", "<", "<=", "==", "!="];
 const flagOptions = [
   "High Bet Amount",
   "Live Bet Risk",
@@ -40,43 +32,108 @@ const flagOptions = [
   "Bet Velocity",
 ];
 
-function getDefaultField(eventType: EventType): RuleField {
-  if (eventType === "Deposit") return "depositAmount";
-  if (eventType === "Withdrawal") return "withdrawalAmount";
-  if (eventType === "Bonus") return "bonusesUsed";
-  if (eventType === "Bet Placement") return "betAmount";
-  return "country";
+function getAllowedCategories(triggerEvent: EventType): RuleConditionCategory[] {
+  if (triggerEvent === "Registration") return ["Player"];
+  if (triggerEvent === "Bet Placement") return ["Player", "Bonus", "Betting", "Risk"];
+  if (triggerEvent === "Deposit") return ["Transaction", "Player", "Bonus"];
+  if (triggerEvent === "Withdrawal") return ["Transaction", "Player", "Bonus"];
+  // Bonus Activation
+  return ["Player", "Bonus"];
 }
 
-function getEventConditionFields(eventType: EventType): RuleField[] {
-  if (eventType === "Registration") return ["country", "state"];
-  if (eventType === "Deposit") return ["depositAmount"];
-  if (eventType === "Withdrawal") return ["withdrawalAmount"];
-  if (eventType === "Bonus") return ["bonusesUsed"];
-  return ["betAmount", "odds"]; // Bet Placement
+function getAllowedFieldsForCategory(
+  triggerEvent: EventType,
+  category: RuleConditionCategory
+): RuleField[] {
+  if (category === "Player") return ["country", "state"];
+  if (category === "Transaction") {
+    if (triggerEvent === "Deposit") return ["depositAmount"];
+    if (triggerEvent === "Withdrawal") return ["withdrawalAmount"];
+    return [];
+  }
+  if (category === "Bonus") return ["bonusesUsed"];
+  if (category === "Betting") {
+    if (triggerEvent === "Bet Placement") return ["betAmount", "odds"];
+    return [];
+  }
+  if (category === "Risk") {
+    if (triggerEvent === "Bet Placement") return ["isLive"];
+    return [];
+  }
+  return [];
 }
 
-function getFieldLabel(field: RuleField) {
-  return field;
+function getDefaultConditionForEvent(triggerEvent: EventType) {
+  const categories = getAllowedCategories(triggerEvent);
+  const defaultCategory = categories.includes("Transaction")
+    ? "Transaction"
+    : categories.includes("Bonus")
+      ? "Bonus"
+      : categories.includes("Player")
+        ? "Player"
+        : categories[0];
+
+  const fields = getAllowedFieldsForCategory(triggerEvent, defaultCategory);
+  const defaultField = fields[0] ?? "country";
+  const defaultOperator: RuleOperator =
+    defaultField === "country" || defaultField === "state" ? "==" : ">";
+
+  return {
+    category: defaultCategory as RuleConditionCategory,
+    field: defaultField,
+    operator: defaultOperator,
+    value: "",
+  };
+}
+
+function isNumericField(field: RuleField) {
+  return (
+    field === "depositAmount" ||
+    field === "withdrawalAmount" ||
+    field === "bonusesUsed" ||
+    field === "betAmount" ||
+    field === "odds"
+  );
+}
+
+function isBooleanField(field: RuleField) {
+  return field === "isLive";
+}
+
+function formatActionListLabel(items: string[]) {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  return items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
+}
+
+function formatVerificationLabel(option: string) {
+  return `require ${option}`;
+}
+
+function formatRestrictionLabel(option: string) {
+  return `apply ${option}`;
 }
 
 export default function RulesPage() {
   const { rules, addRule } = useRules();
   const [eventType, setEventType] = useState<EventType>("Registration");
-  const [country, setCountry] = useState(countryOptions[0]);
-  const [state, setState] = useState(stateOptions[0]);
-  const [field, setField] = useState<RuleField>(getDefaultField("Registration"));
-  const [operator, setOperator] = useState<RuleOperator>("==");
-  const [, setValue] = useState("");
-  const [conditions, setConditions] = useState<
-    Array<{ field: RuleField; operator: RuleOperator; value: string }>
-  >([{ field: "depositAmount", operator: ">", value: "" }]);
-  const [conditionLogic, setConditionLogic] = useState<RuleLogic>("ALL");
   const [ruleMode, setRuleMode] = useState<"Simple" | "Advanced">("Simple");
   const [betweenGroupsLogic, setBetweenGroupsLogic] = useState<RuleLogic>("ALL");
+
+  type ConditionRow = {
+    category: RuleConditionCategory;
+    field: RuleField;
+    operator: RuleOperator;
+    value: string;
+  };
+
   const [conditionGroups, setConditionGroups] = useState<
-    Array<{ conditions: Array<{ field: RuleField; operator: RuleOperator; value: string }> }>
-  >([{ conditions: [{ field: "depositAmount", operator: ">", value: "" }] }]);
+    Array<{ conditions: ConditionRow[] }>
+  >([
+    {
+      conditions: [getDefaultConditionForEvent("Registration")],
+    },
+  ]);
   const [verificationRequired, setVerificationRequired] = useState<
     VerificationType[]
   >([]);
@@ -110,171 +167,93 @@ export default function RulesPage() {
 
   const onEventTypeChange = (nextEventType: EventType) => {
     setEventType(nextEventType);
-    setField(getDefaultField(nextEventType));
-    setOperator(nextEventType === "Registration" ? "==" : ">");
-    setValue("");
     setIsLiveOnly(false);
-    setConditionLogic("ALL");
-    setConditions([
-      {
-        field: getDefaultField(nextEventType),
-        operator: nextEventType === "Registration" ? "==" : ">",
-        value: "",
-      },
-    ]);
     setBetweenGroupsLogic("ALL");
     setConditionGroups([
       {
-        conditions: [
-          {
-            field: getDefaultField(nextEventType),
-            operator: nextEventType === "Registration" ? "==" : ">",
-            value: "",
-          },
-        ],
+        conditions: [getDefaultConditionForEvent(nextEventType)],
       },
     ]);
   };
 
-  const updateCondition = (
-    index: number,
-    patch: Partial<{ field: RuleField; operator: RuleOperator; value: string }>
-  ) => {
-    setConditions((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, ...patch } : item
-      )
-    );
-  };
-
-  const addCondition = () => {
-    setConditions((current) => [
-      ...current,
-      { field: getDefaultField(eventType), operator: ">", value: "" },
-    ]);
-  };
-
-  const removeCondition = (index: number) => {
-    setConditions((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const updateGroupCondition = (
-    groupIndex: number,
-    conditionIndex: number,
-    patch: Partial<{
-      field: RuleField;
-      operator: RuleOperator;
-      value: string;
-    }>
-  ) => {
+  const updateConditionRow = (groupIndex: number, patch: Partial<ConditionRow>) => {
     setConditionGroups((current) =>
       current.map((group, gIndex) => {
         if (gIndex !== groupIndex) return group;
-        return {
-          ...group,
-          conditions: group.conditions.map((condition, cIndex) =>
-            cIndex === conditionIndex ? { ...condition, ...patch } : condition
-          ),
+        const nextCondition: ConditionRow = {
+          ...group.conditions[0],
+          ...patch,
         };
+        return { ...group, conditions: [nextCondition] };
       })
     );
   };
 
-  const addConditionToGroup = (groupIndex: number) => {
-    setConditionGroups((current) =>
-      current.map((group, gIndex) => {
-        if (gIndex !== groupIndex) return group;
-        const usedFields = new Set(group.conditions.map((c) => c.field));
-        const remainingFields = getEventConditionFields(eventType).filter(
-          (fieldOption) => !usedFields.has(fieldOption)
-        );
-        if (remainingFields.length === 0) return group;
-        const nextField = remainingFields[0];
-        return {
-          ...group,
-          conditions: [
-            ...group.conditions,
+  const addConditionRow = () => {
+    setConditionGroups((current) => {
+      const usedKeys = new Set(
+        current.map((g) => `${g.conditions[0].category}-${g.conditions[0].field}`)
+      );
+
+      const categories = getAllowedCategories(eventType);
+      for (const category of categories) {
+        const fields = getAllowedFieldsForCategory(eventType, category);
+        for (const field of fields) {
+          const key = `${category}-${field}`;
+          if (usedKeys.has(key)) continue;
+          const defaultOperator: RuleOperator =
+            field === "country" || field === "state" || field === "isLive"
+              ? "=="
+              : ">";
+          return [
+            ...current,
             {
-              field: nextField,
-              operator: eventType === "Registration" ? "==" : ">",
-              value: "",
+              conditions: [
+                {
+                  category,
+                  field,
+                  operator: defaultOperator,
+                  value: "",
+                },
+              ],
             },
-          ],
-        };
-      })
-    );
+          ];
+        }
+      }
+
+      // Fallback: allow duplicates if we somehow ran out of candidates.
+      const fallback = getDefaultConditionForEvent(eventType);
+      return [...current, { conditions: [fallback] }];
+    });
   };
 
-  const removeConditionFromGroup = (groupIndex: number, conditionIndex: number) => {
-    setConditionGroups((current) =>
-      current.map((group, gIndex) => {
-        if (gIndex !== groupIndex) return group;
-        return {
-          ...group,
-          conditions: group.conditions.filter((_, cIndex) => cIndex !== conditionIndex),
-        };
-      })
-    );
-  };
-
-  const addGroup = () => {
-    setConditionGroups((current) => [
-      ...current,
-      {
-        conditions: [
-          {
-            field: getDefaultField(eventType),
-            operator: eventType === "Registration" ? "==" : ">",
-            value: "",
-          },
-        ],
-      },
-    ]);
+  const removeConditionRow = (groupIndex: number) => {
+    setConditionGroups((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((_, idx) => idx !== groupIndex);
+    });
   };
 
   const onSaveRule = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const registrationConditions: Array<{
-      field: RuleField;
-      operator: RuleOperator;
-      value: string;
-    }> = [
-      { field: "country", operator: "==" as RuleOperator, value: country },
-      { field: "state", operator: "==" as RuleOperator, value: state },
-    ];
+    const normalizedGroups = conditionGroups
+      .map((group) => ({
+        conditions: group.conditions.filter((c) => c.value.trim() !== ""),
+      }))
+      .filter((group) => group.conditions.length > 0);
 
-    const simpleConditions =
-      eventType === "Registration"
-        ? registrationConditions
-        : conditions.filter((item) => item.value.trim() !== "");
+    const flattenedConditions = normalizedGroups.flatMap((g) => g.conditions);
+    if (flattenedConditions.length === 0) return;
 
-    const advancedGroups =
-      eventType === "Registration"
-        ? [{ conditions: registrationConditions }]
-        : conditionGroups
-            .map((group) => ({
-              conditions: group.conditions.filter((c) => c.value.trim() !== ""),
-            }))
-            .filter((group) => group.conditions.length > 0);
-
-    const flattenedConditions =
-      ruleMode === "Advanced" ? advancedGroups.flatMap((g) => g.conditions) : simpleConditions;
-
-    const primaryCondition =
-      flattenedConditions[0] ??
-      ({ field, operator, value: "N/A" } as {
-        field: RuleField;
-        operator: RuleOperator;
-        value: string;
-      });
+    const primaryCondition = flattenedConditions[0];
 
     addRule({
       eventType,
       conditions: flattenedConditions,
-      conditionLogic: eventType === "Registration" ? "ALL" : ruleMode === "Advanced" ? betweenGroupsLogic : conditionLogic,
-      conditionGroups: ruleMode === "Advanced" ? advancedGroups.map((g) => ({ conditions: g.conditions })) : undefined,
-      groupLogic: ruleMode === "Advanced" ? betweenGroupsLogic : undefined,
+      conditionLogic: betweenGroupsLogic,
+      conditionGroups: normalizedGroups,
+      groupLogic: betweenGroupsLogic,
       field: primaryCondition.field,
       operator: primaryCondition.operator,
       value: primaryCondition.value,
@@ -283,83 +262,61 @@ export default function RulesPage() {
       restrictions,
       flags,
     });
-    setValue("");
+
     setVerificationRequired([]);
     setRestrictions([]);
     setFlags([]);
+    setIsLiveOnly(false);
+
+    setRuleMode("Simple");
+    setBetweenGroupsLogic("ALL");
     onEventTypeChange("Registration");
   };
 
-  const registrationConditions: Array<{
-    field: RuleField;
-    operator: RuleOperator;
-    value: string;
-  }> = [
-    { field: "country", operator: "==" as RuleOperator, value: country },
-    { field: "state", operator: "==" as RuleOperator, value: state },
-  ];
+    const previewGroups = conditionGroups
+      .map((group) => ({
+        conditions: group.conditions.filter((c) => c.value.trim() !== ""),
+      }))
+      .filter((group) => group.conditions.length > 0);
 
-  const simplePreviewConditions =
-    eventType === "Registration"
-      ? registrationConditions
-      : conditions.filter((item) => item.value.trim() !== "");
+    const hasAnyConditions = previewGroups.length > 0;
 
-  const advancedPreviewGroups =
-    eventType === "Registration"
-      ? [{ conditions: registrationConditions }]
-      : conditionGroups
-          .map((group) => ({
-            conditions: group.conditions.filter((c) => c.value.trim() !== ""),
-          }))
-          .filter((group) => group.conditions.length > 0);
+    const formatCondition = (condition: {
+      category?: RuleConditionCategory;
+      field: RuleField;
+      operator: RuleOperator;
+      value: string;
+    }) => `${condition.field} ${condition.operator} ${condition.value}`;
 
-  const simpleHasConditions = simplePreviewConditions.length > 0;
-  const advancedHasConditions = advancedPreviewGroups.length > 0;
-  const hasAnyConditions =
-    ruleMode === "Advanced" ? advancedHasConditions : simpleHasConditions;
+    const conditionLines = previewGroups.flatMap((g) => g.conditions).map(formatCondition);
+    const logicOperator = betweenGroupsLogic === "ANY" ? "OR" : "AND";
 
-  const formatCondition = (condition: {
-    field: RuleField;
-    operator: RuleOperator;
-    value: string;
-  }) => `${getFieldLabel(condition.field)} ${condition.operator} ${condition.value}`;
+    const ifExpression = hasAnyConditions
+      ? `Trigger Event = ${eventType}\n${conditionLines
+          .map((line) => `${logicOperator} ${line}`)
+          .join("\n")}`
+      : "Add conditions to define when this rule should trigger";
 
-  const ifExpression =
-    !hasAnyConditions
-      ? ""
-      : ruleMode === "Advanced"
-        ? (() => {
-            const groupExpressions = advancedPreviewGroups.map((group) => {
-              const joined = group.conditions.map(formatCondition).join(" AND ");
-              return `(${joined})`;
-            });
-            const betweenOperator = betweenGroupsLogic === "ANY" ? "OR" : "AND";
-            return groupExpressions.length === 1
-              ? groupExpressions[0]
-              : groupExpressions.join(` ${betweenOperator} `);
-          })()
-        : (() => {
-            const logic = eventType === "Registration" ? "ALL" : conditionLogic;
-            const betweenOperator = logic === "ANY" ? "OR" : "AND";
-            const joined = simplePreviewConditions.map(formatCondition).join(` ${betweenOperator} `);
-            return simplePreviewConditions.length === 1
-              ? `(${joined})`
-              : `(${joined})`;
-          })();
-
-  const thenActions: string[] = [];
-  if (verificationRequired.length > 0) {
-    thenActions.push(`Verify: ${verificationRequired.join(", ")}`);
-  }
-  if (restrictions.length > 0) {
-    thenActions.push(`Restrictions: ${restrictions.join(", ")}`);
-  }
-  if (flags.length > 0) {
-    thenActions.push(`Flags: ${flags.join(", ")}`);
-  }
-  if (thenActions.length === 0) {
-    thenActions.push("No actions configured");
-  }
+    const thenParts: string[] = [];
+    if (verificationRequired.length > 0) {
+      thenParts.push(
+        formatActionListLabel(
+          verificationRequired.map((v) => formatVerificationLabel(v))
+        )
+      );
+    }
+    if (restrictions.length > 0) {
+      thenParts.push(
+        formatActionListLabel(
+          restrictions.map((r) => formatRestrictionLabel(r))
+        )
+      );
+    }
+    if (flags.length > 0) {
+      thenParts.push(`Flags: ${flags.join(", ")}`);
+    }
+    const thenExpression =
+      thenParts.length > 0 ? thenParts.join(" and ") : "No actions configured";
 
   return (
     <div className="space-y-5">
@@ -382,7 +339,7 @@ export default function RulesPage() {
               <option value="Registration">Registration</option>
               <option value="Deposit">Deposit</option>
               <option value="Withdrawal">Withdrawal</option>
-              <option value="Bonus">Bonus</option>
+              <option value="Bonus">Bonus Activation</option>
               <option value="Bet Placement">Bet Placement</option>
             </select>
           </section>
@@ -394,7 +351,11 @@ export default function RulesPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setRuleMode("Simple")}
+            onClick={() => {
+              setRuleMode("Simple");
+              setBetweenGroupsLogic("ALL");
+              setConditionGroups((current) => current.slice(0, 1));
+            }}
             className={`rounded-md px-3 py-1 text-sm font-medium ${
               ruleMode === "Simple"
                 ? "bg-slate-900 text-white"
@@ -423,50 +384,206 @@ export default function RulesPage() {
             </h4>
             {eventType === "Registration" ? (
               <div className="space-y-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">
-                      Country
-                    </label>
-                    <select
-                      value={country}
-                      onChange={(event) => setCountry(event.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                {ruleMode === "Advanced" ? (
+                  <div className="inline-flex rounded-lg border border-slate-300 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setBetweenGroupsLogic("ALL")}
+                      className={`rounded-md px-3 py-1 text-sm font-medium ${
+                        betweenGroupsLogic === "ALL"
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700"
+                      }`}
                     >
-                      {countryOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">
-                      State
-                    </label>
-                    <select
-                      value={state}
-                      onChange={(event) => setState(event.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                      ALL conditions must match
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBetweenGroupsLogic("ANY")}
+                      className={`rounded-md px-3 py-1 text-sm font-medium ${
+                        betweenGroupsLogic === "ANY"
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700"
+                      }`}
                     >
-                      {stateOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
+                      ANY condition can match
+                    </button>
                   </div>
+                ) : null}
+
+                {!hasAnyConditions ? (
+                  <p className="text-sm text-slate-500">
+                    Add conditions to define when this rule should trigger
+                  </p>
+                ) : null}
+
+                <div className="space-y-3">
+                  {conditionGroups.map((group, groupIndex) => {
+                    const condition = group.conditions[0];
+                    const usedKeys = new Set(
+                      conditionGroups
+                        .filter((_, idx) => idx !== groupIndex)
+                        .map(
+                          (g) => `${g.conditions[0].category}-${g.conditions[0].field}`
+                        )
+                    );
+
+                    const allowedCategories = getAllowedCategories(eventType);
+                    const allowedFields = getAllowedFieldsForCategory(
+                      eventType,
+                      condition.category
+                    );
+
+                    const valueInputType = isNumericField(condition.field)
+                      ? "number"
+                      : isBooleanField(condition.field)
+                        ? "text"
+                        : "text";
+
+                    return (
+                      <div
+                        key={groupIndex}
+                        className={`space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 ${
+                          groupIndex > 0 ? "mt-4" : ""
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-700">
+                            Condition {groupIndex + 1}
+                          </p>
+                          {ruleMode === "Advanced" ? (
+                            <button
+                              type="button"
+                              onClick={() => removeConditionRow(groupIndex)}
+                              disabled={conditionGroups.length === 1}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_1fr_auto]">
+                          <select
+                            value={condition.category}
+                            onChange={(event) => {
+                              const nextCategory =
+                                event.target.value as RuleConditionCategory;
+                              const nextFields = getAllowedFieldsForCategory(
+                                eventType,
+                                nextCategory
+                              );
+                              const nextField = nextFields[0] ?? condition.field;
+                              const nextOperator: RuleOperator =
+                                nextField === "country" ||
+                                nextField === "state" ||
+                                nextField === "isLive"
+                                  ? "=="
+                                  : ">";
+                              updateConditionRow(groupIndex, {
+                                category: nextCategory,
+                                field: nextField,
+                                operator: nextOperator,
+                                value: "",
+                              });
+                            }}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                          >
+                            {allowedCategories.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+
+                          <select
+                            value={condition.field}
+                            onChange={(event) => {
+                              const nextField =
+                                event.target.value as RuleField;
+                              const nextOperator: RuleOperator =
+                                nextField === "country" ||
+                                nextField === "state" ||
+                                nextField === "isLive"
+                                  ? "=="
+                                  : ">";
+                              updateConditionRow(groupIndex, {
+                                field: nextField,
+                                operator: nextOperator,
+                                value: "",
+                              });
+                            }}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                          >
+                            {allowedFields.map((fieldOption) => {
+                              const key = `${condition.category}-${fieldOption}`;
+                              const isDisabled = usedKeys.has(key) && fieldOption !== condition.field;
+                              return (
+                                <option
+                                  key={fieldOption}
+                                  value={fieldOption}
+                                  disabled={isDisabled}
+                                >
+                                  {fieldOption}
+                                </option>
+                              );
+                            })}
+                          </select>
+
+                          <select
+                            value={condition.operator}
+                            onChange={(event) =>
+                              updateConditionRow(groupIndex, {
+                                operator: event.target.value as RuleOperator,
+                              })
+                            }
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                          >
+                            {operatorOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+
+                          <input
+                            type={valueInputType}
+                            value={condition.value}
+                            onChange={(event) =>
+                              updateConditionRow(groupIndex, {
+                                value: event.target.value,
+                              })
+                            }
+                            placeholder={
+                              isNumericField(condition.field)
+                                ? "0"
+                                : isBooleanField(condition.field)
+                                  ? "true/false"
+                                  : "e.g. United States"
+                            }
+                            min={isNumericField(condition.field) ? 0 : undefined}
+                            step={isNumericField(condition.field) ? "0.01" : undefined}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                          />
+
+                          {ruleMode === "Advanced" ? null : (
+                            <div />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <ReadOnlyField label="Field" value="country" />
-                  <ReadOnlyField label="Operator" value="==" />
-                  <ReadOnlyField label="Value" value={country} />
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <ReadOnlyField label="Field" value="state" />
-                  <ReadOnlyField label="Operator" value="==" />
-                  <ReadOnlyField label="Value" value={state} />
-                </div>
+
+                {ruleMode === "Advanced" ? (
+                  <button
+                    type="button"
+                    onClick={addConditionRow}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                  >
+                    Add Condition
+                  </button>
+                ) : null}
               </div>
             ) : (
               <div className="space-y-3">
@@ -478,107 +595,123 @@ export default function RulesPage() {
                       </p>
                     ) : null}
 
-                    <div className="inline-flex rounded-lg border border-slate-300 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setConditionLogic("ALL")}
-                        className={`rounded-md px-3 py-1 text-sm font-medium ${
-                          conditionLogic === "ALL"
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700"
-                        }`}
-                      >
-                        ALL (AND)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConditionLogic("ANY")}
-                        className={`rounded-md px-3 py-1 text-sm font-medium ${
-                          conditionLogic === "ANY"
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700"
-                        }`}
-                      >
-                        ANY (OR)
-                      </button>
-                    </div>
+                    {conditionGroups[0] ? (
+                      (() => {
+                        const condition = conditionGroups[0].conditions[0];
+                        const allowedCategories = getAllowedCategories(eventType);
+                        const allowedFields = getAllowedFieldsForCategory(
+                          eventType,
+                          condition.category
+                        );
+                        const valueInputType = isNumericField(condition.field)
+                          ? "number"
+                          : isBooleanField(condition.field)
+                            ? "text"
+                            : "text";
+                        return (
+                          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-sm font-semibold text-slate-700">
+                              Condition 1
+                            </p>
+                            <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_1fr]">
+                              <select
+                                value={condition.category}
+                                onChange={(event) => {
+                                  const nextCategory =
+                                    event.target.value as RuleConditionCategory;
+                                  const nextFields = getAllowedFieldsForCategory(
+                                    eventType,
+                                    nextCategory
+                                  );
+                                  const nextField = nextFields[0] ?? condition.field;
+                                  const nextOperator: RuleOperator =
+                                    nextField === "country" ||
+                                    nextField === "state" ||
+                                    nextField === "isLive"
+                                      ? "=="
+                                      : ">";
+                                  updateConditionRow(0, {
+                                    category: nextCategory,
+                                    field: nextField,
+                                    operator: nextOperator,
+                                    value: "",
+                                  });
+                                }}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {allowedCategories.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat}
+                                  </option>
+                                ))}
+                              </select>
 
-                    {conditions.map((condition, index) => (
-                      <div
-                        key={index}
-                        className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]"
-                      >
-                        <select
-                          value={condition.field}
-                          onChange={(event) =>
-                            updateCondition(index, {
-                              field: event.target.value as RuleField,
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                        >
-                          {eventType === "Deposit" ? (
-                            <option value="depositAmount">depositAmount</option>
-                          ) : null}
-                          {eventType === "Withdrawal" ? (
-                            <option value="withdrawalAmount">withdrawalAmount</option>
-                          ) : null}
-                          {eventType === "Bonus" ? (
-                            <option value="bonusesUsed">bonusesUsed</option>
-                          ) : null}
-                          {eventType === "Bet Placement" ? (
-                            <>
-                              <option value="betAmount">betAmount</option>
-                              <option value="odds">odds</option>
-                            </>
-                          ) : null}
-                        </select>
+                              <select
+                                value={condition.field}
+                                onChange={(event) => {
+                                  const nextField =
+                                    event.target.value as RuleField;
+                                  const nextOperator: RuleOperator =
+                                    nextField === "country" ||
+                                    nextField === "state" ||
+                                    nextField === "isLive"
+                                      ? "=="
+                                      : ">";
+                                  updateConditionRow(0, {
+                                    field: nextField,
+                                    operator: nextOperator,
+                                    value: "",
+                                  });
+                                }}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {allowedFields.map((fieldOption) => (
+                                  <option key={fieldOption} value={fieldOption}>
+                                    {fieldOption}
+                                  </option>
+                                ))}
+                              </select>
 
-                        <select
-                          value={condition.operator}
-                          onChange={(event) =>
-                            updateCondition(index, {
-                              operator: event.target.value as RuleOperator,
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                        >
-                          {operatorOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                              <select
+                                value={condition.operator}
+                                onChange={(event) =>
+                                  updateConditionRow(0, {
+                                    operator: event.target.value as RuleOperator,
+                                  })
+                                }
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {operatorOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
 
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={condition.value}
-                          onChange={(event) =>
-                            updateCondition(index, { value: event.target.value })
-                          }
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => removeCondition(index)}
-                          disabled={conditions.length === 1}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-
-                    <button
-                      type="button"
-                      onClick={addCondition}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-                    >
-                      Add Condition
-                    </button>
+                              <input
+                                type={valueInputType}
+                                value={condition.value}
+                                onChange={(event) =>
+                                  updateConditionRow(0, {
+                                    value: event.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  isNumericField(condition.field)
+                                    ? "0"
+                                    : isBooleanField(condition.field)
+                                      ? "true/false"
+                                      : "e.g. United States"
+                                }
+                                min={isNumericField(condition.field) ? 0 : undefined}
+                                step={isNumericField(condition.field) ? "0.01" : undefined}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -598,7 +731,7 @@ export default function RulesPage() {
                             : "text-slate-700"
                         }`}
                       >
-                        ANY (OR)
+                        ANY condition can match
                       </button>
                       <button
                         type="button"
@@ -609,118 +742,175 @@ export default function RulesPage() {
                             : "text-slate-700"
                         }`}
                       >
-                        ALL (AND)
+                        ALL conditions must match
                       </button>
                     </div>
 
-                    {conditionGroups.map((group, groupIndex) => (
-                      <div
-                        key={groupIndex}
-                        className={`space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 ${
-                          groupIndex > 0 ? "mt-4" : ""
-                        }`}
-                      >
-                        {(() => {
-                          const usedFields = new Set(group.conditions.map((c) => c.field));
-                          const remainingFields = getEventConditionFields(eventType).filter(
-                            (fieldOption) => !usedFields.has(fieldOption)
-                          );
-                          return (
-                            <>
+                    <div className="space-y-3">
+                      {conditionGroups.map((group, groupIndex) => {
+                        const condition = group.conditions[0];
+                        const usedKeys = new Set(
+                          conditionGroups
+                            .filter((_, idx) => idx !== groupIndex)
+                            .map(
+                              (g) =>
+                                `${g.conditions[0].category}-${g.conditions[0].field}`
+                            )
+                        );
+
+                        const allowedCategories = getAllowedCategories(eventType);
+                        const allowedFields = getAllowedFieldsForCategory(
+                          eventType,
+                          condition.category
+                        );
+
+                        const valueInputType = isNumericField(condition.field)
+                          ? "number"
+                          : isBooleanField(condition.field)
+                            ? "text"
+                            : "text";
+
+                        return (
+                          <div
+                            key={groupIndex}
+                            className={`space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 ${
+                              groupIndex > 0 ? "mt-4" : ""
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
                               <p className="text-sm font-semibold text-slate-700">
-                                Group {groupIndex + 1} (ALL conditions must match)
+                                Condition {groupIndex + 1}
                               </p>
-
-                              {group.conditions.map((condition, index) => (
-                                <div
-                                  key={index}
-                                  className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]"
-                                >
-                                  <select
-                                    value={condition.field}
-                                    onChange={(event) =>
-                                      updateGroupCondition(groupIndex, index, {
-                                        field: event.target.value as RuleField,
-                                      })
-                                    }
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                                  >
-                                    {getEventConditionFields(eventType).map((fieldOption) => (
-                                      <option
-                                        key={fieldOption}
-                                        value={fieldOption}
-                                        disabled={
-                                          usedFields.has(fieldOption) &&
-                                          fieldOption !== condition.field
-                                        }
-                                      >
-                                        {getFieldLabel(fieldOption)}
-                                      </option>
-                                    ))}
-                                  </select>
-
-                                  <select
-                                    value={condition.operator}
-                                    onChange={(event) =>
-                                      updateGroupCondition(groupIndex, index, {
-                                        operator: event.target.value as RuleOperator,
-                                      })
-                                    }
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                                  >
-                                    {operatorOptions.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
-                                      </option>
-                                    ))}
-                                  </select>
-
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={condition.value}
-                                    onChange={(event) =>
-                                      updateGroupCondition(groupIndex, index, {
-                                        value: event.target.value,
-                                      })
-                                    }
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                                  />
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      removeConditionFromGroup(groupIndex, index)
-                                    }
-                                    disabled={group.conditions.length === 1}
-                                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ))}
-
                               <button
                                 type="button"
-                                onClick={() => addConditionToGroup(groupIndex)}
-                                disabled={remainingFields.length === 0}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                onClick={() => removeConditionRow(groupIndex)}
+                                disabled={conditionGroups.length === 1}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                Add Condition
+                                Remove
                               </button>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ))}
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_1fr_auto]">
+                              <select
+                                value={condition.category}
+                                onChange={(event) => {
+                                  const nextCategory =
+                                    event.target.value as RuleConditionCategory;
+                                  const nextFields = getAllowedFieldsForCategory(
+                                    eventType,
+                                    nextCategory
+                                  );
+                                  const nextField = nextFields[0] ?? condition.field;
+                                  const nextOperator: RuleOperator =
+                                    nextField === "country" ||
+                                    nextField === "state" ||
+                                    nextField === "isLive"
+                                      ? "=="
+                                      : ">";
+                                  updateConditionRow(groupIndex, {
+                                    category: nextCategory,
+                                    field: nextField,
+                                    operator: nextOperator,
+                                    value: "",
+                                  });
+                                }}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {allowedCategories.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={condition.field}
+                                onChange={(event) => {
+                                  const nextField =
+                                    event.target.value as RuleField;
+                                  const nextOperator: RuleOperator =
+                                    nextField === "country" ||
+                                    nextField === "state" ||
+                                    nextField === "isLive"
+                                      ? "=="
+                                      : ">";
+                                  updateConditionRow(groupIndex, {
+                                    field: nextField,
+                                    operator: nextOperator,
+                                    value: "",
+                                  });
+                                }}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {allowedFields.map((fieldOption) => {
+                                  const key = `${condition.category}-${fieldOption}`;
+                                  const isDisabled =
+                                    usedKeys.has(key) &&
+                                    fieldOption !== condition.field;
+                                  return (
+                                    <option
+                                      key={fieldOption}
+                                      value={fieldOption}
+                                      disabled={isDisabled}
+                                    >
+                                      {fieldOption}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+
+                              <select
+                                value={condition.operator}
+                                onChange={(event) =>
+                                  updateConditionRow(groupIndex, {
+                                    operator: event.target.value as RuleOperator,
+                                  })
+                                }
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              >
+                                {operatorOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <input
+                                type={valueInputType}
+                                value={condition.value}
+                                onChange={(event) =>
+                                  updateConditionRow(groupIndex, {
+                                    value: event.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  isNumericField(condition.field)
+                                    ? "0"
+                                    : isBooleanField(condition.field)
+                                      ? "true/false"
+                                      : "e.g. United States"
+                                }
+                                min={
+                                  isNumericField(condition.field) ? 0 : undefined
+                                }
+                                step={
+                                  isNumericField(condition.field) ? "0.01" : undefined
+                                }
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
 
                     <button
                       type="button"
-                      onClick={addGroup}
+                      onClick={addConditionRow}
                       className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
                     >
-                      Add Group
+                      Add Condition
                     </button>
                   </>
                 )}
@@ -748,15 +938,17 @@ export default function RulesPage() {
               <p className="text-sm font-medium text-slate-800">
                 IF:
               </p>
-              <p className="font-mono text-xs text-slate-700">
-                {hasAnyConditions ? ifExpression : "Add conditions to define when this rule should trigger"}
-              </p>
+              <pre className="font-mono text-xs text-slate-700 whitespace-pre-wrap">
+                {hasAnyConditions
+                  ? ifExpression
+                  : "Add conditions to define when this rule should trigger"}
+              </pre>
               <p className="mt-2 text-sm font-medium text-slate-800">
                 THEN:
               </p>
-              <p className="font-mono text-xs text-slate-700">
-                {thenActions.join(" | ")}
-              </p>
+              <pre className="font-mono text-xs text-slate-700 whitespace-pre-wrap">
+                {thenExpression}
+              </pre>
             </div>
           </section>
 
@@ -863,14 +1055,17 @@ export default function RulesPage() {
                             `G${groupIndex + 1}[${group.conditions
                               .map(
                                 (item) =>
-                                  `${item.field} ${item.operator} ${item.value}`
+                                  `${item.category ? `${item.category}.` : ""}${item.field} ${item.operator} ${item.value}`
                               )
                               .join(", ")}]`
                         )
                         .join(" ")}`
                     : rule.conditions && rule.conditions.length > 0
                       ? `${rule.conditionLogic ?? "ALL"} -> ${rule.conditions
-                          .map((item) => `${item.field} ${item.operator} ${item.value}`)
+                          .map(
+                            (item) =>
+                              `${item.category ? `${item.category}.` : ""}${item.field} ${item.operator} ${item.value}`
+                          )
                           .join(" | ")}`
                       : `${rule.field} ${rule.operator} ${rule.value}`}
                   {rule.isLiveOnly ? " (Live Only)" : ""}
@@ -895,20 +1090,6 @@ export default function RulesPage() {
           </div>
         )}
       </section>
-    </div>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium text-slate-700">{label}</label>
-      <input
-        type="text"
-        value={value}
-        readOnly
-        className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-      />
     </div>
   );
 }

@@ -74,11 +74,25 @@ export default function SimulatorPage() {
       "Odds >": { field: "odds", operator: ">" },
     };
 
+    const inferCategoryFromField = (field: string) => {
+      if (field === "country" || field === "state") return "Player";
+      if (field === "depositAmount" || field === "withdrawalAmount") return "Transaction";
+      if (field === "bonusesUsed") return "Bonus";
+      if (field === "betAmount" || field === "odds") return "Betting";
+      if (field === "isLive") return "Risk";
+      return "Transaction";
+    };
+
     const normalizedConditions =
       rule.conditions && rule.conditions.length > 0
         ? rule.conditions
         : [
             {
+              category: inferCategoryFromField(
+                (rule.field as string) ??
+                  legacyFieldMap[rule.conditionType ?? ""]?.field ??
+                  "count"
+              ),
               field:
                 (rule.field as string) ??
                 legacyFieldMap[rule.conditionType ?? ""]?.field ??
@@ -92,43 +106,39 @@ export default function SimulatorPage() {
           ];
 
     const evaluateCondition = (condition: {
+      category?: string;
       field: string;
       operator: string;
       value: string;
     }) => {
-      if (condition.field === "country") {
-        return evaluateOperator(simulation.country, condition.operator, condition.value);
-      }
-      if (condition.field === "state") {
-        return evaluateOperator(simulation.state, condition.operator, condition.value);
+      const category = condition.category ?? inferCategoryFromField(condition.field);
+
+      let left: number | string | boolean | null = null;
+
+      // Category-aware mapping to simulation / player attributes.
+      if (category === "Transaction") {
+        if (condition.field === "depositAmount") left = simulation.depositAmount;
+        else if (condition.field === "withdrawalAmount") left = simulation.withdrawalAmount;
+      } else if (category === "Player") {
+        if (condition.field === "country") left = simulation.country;
+        else if (condition.field === "state") left = simulation.state;
+      } else if (category === "Bonus") {
+        if (condition.field === "bonusesUsed") left = simulation.count;
+      } else if (category === "Betting") {
+        if (condition.field === "betAmount") left = simulation.betAmount;
+        else if (condition.field === "odds") left = simulation.odds;
+      } else if (category === "Risk") {
+        if (condition.field === "isLive") left = simulation.isLive;
       }
 
-      const numericValue = Number(condition.value);
-      if (Number.isNaN(numericValue)) {
-        return false;
-      }
+      if (left === null) return false;
 
-      const numericByField: Record<string, number> = {
-        depositAmount: simulation.depositAmount,
-        withdrawalAmount: simulation.withdrawalAmount,
-        bonusesUsed: simulation.count,
-        betAmount: simulation.betAmount,
-        odds: simulation.odds,
-        count: simulation.count,
-      };
-
-      return evaluateOperator(
-        numericByField[condition.field] ?? simulation.count,
-        condition.operator,
-        numericValue
-      );
+      return evaluateOperator(left, condition.operator, condition.value);
     };
 
     if (rule.conditionGroups && rule.conditionGroups.length > 0) {
       const groupPasses = rule.conditionGroups.map((group) =>
-        group.conditions.every((condition) =>
-          evaluateCondition(condition as { field: string; operator: string; value: string })
-        )
+        group.conditions.every((condition) => evaluateCondition(condition))
       );
 
       return (rule.groupLogic ?? "ALL") === "ANY"
@@ -278,7 +288,7 @@ export default function SimulatorPage() {
                 <option value="Registration">Registration</option>
                 <option value="Deposit">Deposit</option>
                 <option value="Withdrawal">Withdrawal</option>
-                <option value="Bonus">Bonus</option>
+                <option value="Bonus">Bonus Activation</option>
                 <option value="Bet Placement">Bet Placement</option>
               </select>
             </div>
@@ -403,20 +413,46 @@ export default function SimulatorPage() {
 }
 
 function evaluateOperator(
-  left: number | string,
+  left: number | string | boolean,
   operator: string,
-  right: number | string
+  rightRaw: string
 ) {
-  if (operator === "==") {
-    return left === right;
-  }
-  if (typeof left !== "number" || typeof right !== "number") {
+  // String comparison
+  if (typeof left === "string") {
+    if (operator === "==") return left === rightRaw;
+    if (operator === "!=") return left !== rightRaw;
     return false;
   }
-  if (operator === ">") return left > right;
-  if (operator === ">=") return left >= right;
-  if (operator === "<") return left < right;
-  if (operator === "<=") return left <= right;
+
+  // Boolean comparison
+  if (typeof left === "boolean") {
+    const isTrueLike =
+      rightRaw.toLowerCase() === "true" ||
+      rightRaw.toLowerCase() === "1" ||
+      rightRaw.toLowerCase() === "yes";
+    const isFalseLike =
+      rightRaw.toLowerCase() === "false" ||
+      rightRaw.toLowerCase() === "0" ||
+      rightRaw.toLowerCase() === "no";
+
+    if (!isTrueLike && !isFalseLike) return false;
+    const right = isTrueLike ? true : false;
+
+    if (operator === "==") return left === right;
+    if (operator === "!=") return left !== right;
+    return false;
+  }
+
+  // Numeric comparison
+  const rightNum = Number(rightRaw);
+  if (Number.isNaN(rightNum)) return false;
+
+  if (operator === "==") return left === rightNum;
+  if (operator === "!=") return left !== rightNum;
+  if (operator === ">") return left > rightNum;
+  if (operator === ">=") return left >= rightNum;
+  if (operator === "<") return left < rightNum;
+  if (operator === "<=") return left <= rightNum;
   return false;
 }
 

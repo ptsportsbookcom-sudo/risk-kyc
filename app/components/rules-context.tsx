@@ -22,15 +22,29 @@ export type RuleField =
   | "withdrawalAmount"
   | "bonusesUsed"
   | "betAmount"
-  | "odds";
-export type RuleOperator = ">" | ">=" | "<" | "<=" | "==";
+  | "odds"
+  | "isLive";
+export type RuleOperator = ">" | ">=" | "<" | "<=" | "==" | "!=";
 export type RuleLogic = "ALL" | "ANY";
+
+export type RuleConditionCategory =
+  | "Transaction"
+  | "Player"
+  | "Bonus"
+  | "Betting"
+  | "Risk";
+
 export type RuleCondition = {
+  // Optional for backward compatibility with previously-saved rules.
+  // New UI always sets it.
+  category?: RuleConditionCategory;
   field: RuleField;
   operator: RuleOperator;
   value: string;
 };
+
 export type RuleConditionGroup = {
+  // Within each group we use AND semantics (kept for backward compatibility).
   conditions: RuleCondition[];
 };
 export type ConditionType =
