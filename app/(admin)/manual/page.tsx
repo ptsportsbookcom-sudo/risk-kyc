@@ -47,6 +47,26 @@ export default function ManualTriggerPage() {
   const [flags, setFlags] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
 
+  const manualActionObject = {
+    verifications: actionType === "KYC" ? verificationRequired : [],
+    restrictions: actionType === "Restriction" ? restrictions : [],
+    flags: actionType === "Flag" ? flags : [],
+  };
+
+  // Keep manual trigger output aligned with rule engine structure.
+  const resolvedPreview = resolveAggregatedActions(manualActionObject);
+  const manualResult = {
+    triggeredRules: [] as Array<{ id: string; name: string; priority: number }>,
+    aggregatedActions: resolvedPreview.aggregatedActions,
+    finalDecision: {
+      verification: resolvedPreview.verification,
+      restriction: resolvedPreview.restriction,
+      flags: resolvedPreview.flags,
+      triggeredRules: [] as Array<{ id: string; name: string; priority: number }>,
+      aggregatedActions: resolvedPreview.aggregatedActions,
+    },
+  };
+
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
       current.includes(value)
@@ -78,19 +98,13 @@ export default function ManualTriggerPage() {
       return;
     }
 
-    const normalizedUserId = userId.trim() || `MANUAL-${Date.now()}`;
+    const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
-    const aggregated = {
-      verifications: actionType === "KYC" ? verificationRequired : [],
-      restrictions: actionType === "Restriction" ? restrictions : [],
-      flags: actionType === "Flag" ? flags : [],
-    };
-    const resolved = resolveAggregatedActions(aggregated);
-    const finalVerifications = resolved.verification
-      ? [resolved.verification as VerificationType]
+    const finalVerifications = manualResult.finalDecision.verification
+      ? [manualResult.finalDecision.verification as VerificationType]
       : [];
-    const finalRestrictions = resolved.restriction
-      ? [resolved.restriction as RestrictionType]
+    const finalRestrictions = manualResult.finalDecision.restriction
+      ? [manualResult.finalDecision.restriction as RestrictionType]
       : [];
 
     applyTriggerToPlayer({
@@ -98,7 +112,7 @@ export default function ManualTriggerPage() {
       username: normalizedUsername,
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
-      flags: resolved.flags,
+      flags: manualResult.finalDecision.flags,
     });
 
     addCase({
@@ -106,10 +120,11 @@ export default function ManualTriggerPage() {
       username: normalizedUsername,
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
-      flags: resolved.flags,
+      flags: manualResult.finalDecision.flags,
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),
+      status: "Pending",
     });
 
     const auditEntry = {
@@ -118,9 +133,9 @@ export default function ManualTriggerPage() {
       admin: "Admin",
       reason: reason.trim(),
       actions: {
-        verification: resolved.verification,
-        restriction: resolved.restriction,
-        flags: resolved.flags,
+        verification: manualResult.finalDecision.verification,
+        restriction: manualResult.finalDecision.restriction,
+        flags: manualResult.finalDecision.flags,
       },
       timestamp: new Date().toISOString(),
     };
@@ -249,6 +264,30 @@ export default function ManualTriggerPage() {
           ) : null}
         </section>
 
+        <section className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+            Preview Decision
+          </h4>
+          <div className="grid gap-3 md:grid-cols-3">
+            <PreviewItem
+              label="Final Verification"
+              value={manualResult.finalDecision.verification ?? "None"}
+            />
+            <PreviewItem
+              label="Final Restriction"
+              value={manualResult.finalDecision.restriction ?? "None"}
+            />
+            <PreviewItem
+              label="Flags"
+              value={
+                manualResult.finalDecision.flags.length > 0
+                  ? manualResult.finalDecision.flags.join(", ")
+                  : "None"
+              }
+            />
+          </div>
+        </section>
+
         <section className="space-y-2">
           {actionType === "Restriction" ? (
             <>
@@ -314,5 +353,16 @@ export default function ManualTriggerPage() {
         </div>
       </form>
     </section>
+  );
+}
+
+function PreviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+    </article>
   );
 }

@@ -43,6 +43,7 @@ type CreateKycCaseInput = {
   source?: "manual" | "simulation";
   reason?: string;
   createdAt?: string;
+  status?: ReviewStatus;
 };
 
 type KycCasesContextValue = {
@@ -150,7 +151,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         userId: input.userId,
         username: input.username,
         verificationRequired: input.verificationRequired,
-        status: "Pending",
+        status: input.status ?? "Pending",
         createdDate,
         createdAt: input.createdAt ?? now.toISOString(),
         source: input.source ?? "simulation",
