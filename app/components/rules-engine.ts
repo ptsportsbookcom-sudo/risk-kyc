@@ -2,6 +2,7 @@
 
 import { Rule } from "@/app/components/rules-context";
 import { getFraudSignals } from "@/app/components/fraud-signals";
+import { getKycLevel } from "@/app/components/kyc-levels";
 
 export type RulesEngineInput = {
   eventType: string;
@@ -39,6 +40,7 @@ export type RulesEngineResult = {
   };
   finalDecision: {
     verification: string | null;
+    kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];
     triggeredRules: Array<{ id: string; name: string; priority: number }>;
@@ -79,11 +81,20 @@ function pickHighestPriority(items: string[], priorityMap: Record<string, number
 }
 
 export function resolveAggregatedActions(aggregatedActions: AggregatedActionsInput) {
+  const normalizedVerifications = Array.from(new Set(aggregatedActions.verifications));
+  const computedKycLevel = getKycLevel(normalizedVerifications);
+  const verificationByLevel: Record<"L0" | "L1" | "L2" | "L3", string | null> = {
+    L0: null,
+    L1: "ID",
+    L2: "Selfie",
+    L3: "Full KYC",
+  };
+
   return {
-    verification: pickHighestPriority(
-      aggregatedActions.verifications,
-      verificationPriority
-    ),
+    verification:
+      verificationByLevel[computedKycLevel] ??
+      pickHighestPriority(normalizedVerifications, verificationPriority),
+    kycLevel: computedKycLevel,
     restriction: pickHighestPriority(
       aggregatedActions.restrictions,
       restrictionPriority
@@ -177,6 +188,7 @@ function getEmptyResult(): RulesEngineResult {
     },
     finalDecision: {
       verification: null,
+      kycLevel: "L0",
       restriction: null,
       flags: [],
       triggeredRules: [],
@@ -294,6 +306,7 @@ export function runRulesEngine({
   const resolved = resolveAggregatedActions(aggregatedActions);
   const finalDecision = {
     verification: resolved.verification,
+    kycLevel: resolved.kycLevel,
     restriction: resolved.restriction,
     flags: resolved.flags,
     triggeredRules,

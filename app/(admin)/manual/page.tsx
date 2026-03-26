@@ -60,6 +60,7 @@ export default function ManualTriggerPage() {
     aggregatedActions: resolvedPreview.aggregatedActions,
     finalDecision: {
       verification: resolvedPreview.verification,
+      kycLevel: resolvedPreview.kycLevel,
       restriction: resolvedPreview.restriction,
       flags: resolvedPreview.flags,
       triggeredRules: [] as Array<{ id: string; name: string; priority: number }>,
@@ -119,6 +120,7 @@ export default function ManualTriggerPage() {
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
+      kycLevel: manualResult.finalDecision.kycLevel,
       restrictions: finalRestrictions,
       flags: manualResult.finalDecision.flags,
       source: "manual",

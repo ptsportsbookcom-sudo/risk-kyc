@@ -3,8 +3,8 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { RestrictionType } from "@/app/components/rules-context";
 import { VerificationType } from "@/app/components/kyc-cases-context";
+import { getKycLevel, KycLevel } from "@/app/components/kyc-levels";
 
-export type KycLevel = "L0" | "L2" | "L3";
 export type PlayerLimits = {
   maxDeposit: number | null;
   canWithdraw: boolean;
@@ -69,23 +69,10 @@ type PlayersContextValue = {
 const PLAYERS_STORAGE_KEY = "kyc_players";
 const levelRank: Record<KycLevel, number> = {
   L0: 0,
+  L1: 1,
   L2: 2,
   L3: 3,
 };
-
-export function getKycLevel(verificationRequired: VerificationType[]): KycLevel {
-  if (verificationRequired.includes("Full KYC")) {
-    return "L3";
-  }
-  if (
-    verificationRequired.includes("ID") ||
-    verificationRequired.includes("Selfie") ||
-    verificationRequired.includes("Proof")
-  ) {
-    return "L2";
-  }
-  return "L0";
-}
 
 export function getLimitsForLevel(kycLevel: KycLevel): PlayerLimits {
   if (kycLevel === "L3") {
@@ -100,6 +87,14 @@ export function getLimitsForLevel(kycLevel: KycLevel): PlayerLimits {
     return {
       maxDeposit: 1000,
       canWithdraw: true,
+      canPlayCasino: true,
+    };
+  }
+
+  if (kycLevel === "L1") {
+    return {
+      maxDeposit: 500,
+      canWithdraw: false,
       canPlayCasino: true,
     };
   }

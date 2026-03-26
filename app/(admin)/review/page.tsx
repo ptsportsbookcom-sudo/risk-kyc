@@ -7,7 +7,6 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
-import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -36,7 +35,6 @@ function restrictionClass(restriction: string) {
 export default function ReviewPage() {
   const router = useRouter();
   const { cases, updateCaseStatus } = useKycCases();
-  const { getPlayerById } = usePlayers();
   const [statusFilter, setStatusFilter] = useState<"All" | ReviewStatus>("All");
   const [verificationFilter, setVerificationFilter] = useState<
     "All" | VerificationType
@@ -165,7 +163,6 @@ export default function ReviewPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRows.map((row) => {
-                const player = getPlayerById(row.userId);
                 const resolvedRestrictions = row.restrictions ?? [];
                 return (
                 <tr
@@ -195,7 +192,7 @@ export default function ReviewPage() {
                       : "None"}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {player?.kycLevel ?? "N/A"}
+                    {row.kycLevel}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span

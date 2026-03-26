@@ -17,6 +17,7 @@ type SimulationResult = {
   aggregatedRestrictions: string;
   aggregatedFlags: string;
   finalVerification: string;
+  finalKycLevel: string;
   finalRestriction: string;
   finalFlags: string;
   detectedFraudSignals: string;
@@ -30,6 +31,7 @@ const initialResult: SimulationResult = {
   aggregatedRestrictions: "None",
   aggregatedFlags: "None",
   finalVerification: "None",
+  finalKycLevel: "L0",
   finalRestriction: "None",
   finalFlags: "None",
   detectedFraudSignals: "None",
@@ -123,6 +125,7 @@ export default function SimulatorPage() {
             ? engineResult.aggregatedActions.flags.join(", ")
             : "None",
         finalVerification: "None",
+        finalKycLevel: "L0",
         finalRestriction: "None",
         finalFlags:
           engineResult.finalDecision.flags.length > 0
@@ -137,6 +140,7 @@ export default function SimulatorPage() {
     }
 
     const resolvedVerification = engineResult.finalDecision.verification;
+    const resolvedKycLevel = engineResult.finalDecision.kycLevel;
     const resolvedRestriction = engineResult.finalDecision.restriction;
     const finalVerifications: VerificationType[] = resolvedVerification
       ? [resolvedVerification as VerificationType]
@@ -175,6 +179,7 @@ export default function SimulatorPage() {
         userId: normalizedUserId,
         username: normalizedUsername,
         verificationRequired: finalVerifications,
+        kycLevel: resolvedKycLevel,
         restrictions: triggerResult.appliedRestrictions,
       });
       createdCases = 1;
@@ -200,6 +205,7 @@ export default function SimulatorPage() {
           ? engineResult.aggregatedActions.flags.join(", ")
           : "None",
       finalVerification: engineResult.finalDecision.verification ?? "None",
+      finalKycLevel: engineResult.finalDecision.kycLevel,
       finalRestriction: engineResult.finalDecision.restriction ?? "None",
       finalFlags:
         engineResult.finalDecision.flags.length > 0
@@ -520,6 +526,7 @@ export default function SimulatorPage() {
           </p>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             <ResultItem label="Verification" value={result.finalVerification} />
+            <ResultItem label="Final KYC Level" value={result.finalKycLevel} />
             <ResultItem label="Restriction" value={result.finalRestriction} />
             <ResultItem label="Flags" value={result.finalFlags} />
           </div>

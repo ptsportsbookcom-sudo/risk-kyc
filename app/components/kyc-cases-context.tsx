@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { getKycLevel, KycLevel } from "@/app/components/kyc-levels";
 
 export type VerificationType = "ID" | "Selfie" | "Proof" | "Full KYC";
 export type ReviewStatus = "Pending" | "Approved" | "Rejected";
@@ -24,6 +25,7 @@ export type KycCase = {
   userId: string;
   username: string;
   verificationRequired: VerificationType[];
+  kycLevel: KycLevel;
   status: ReviewStatus;
   createdDate: string;
   createdAt?: string;
@@ -38,6 +40,7 @@ type CreateKycCaseInput = {
   userId: string;
   username: string;
   verificationRequired: VerificationType[];
+  kycLevel?: KycLevel;
   restrictions: string[];
   flags?: string[];
   source?: "manual" | "simulation";
@@ -121,6 +124,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         ? parsedCases.map((kycCase) =>
             normalizeRestrictionsForStatus({
               ...kycCase,
+              kycLevel: kycCase.kycLevel ?? getKycLevel(kycCase.verificationRequired ?? []),
               documents: Array.isArray(kycCase.documents) ? kycCase.documents : [],
             })
           )
@@ -151,6 +155,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         userId: input.userId,
         username: input.username,
         verificationRequired: input.verificationRequired,
+        kycLevel: input.kycLevel ?? getKycLevel(input.verificationRequired),
         status: input.status ?? "Pending",
         createdDate,
         createdAt: input.createdAt ?? now.toISOString(),
