@@ -25,6 +25,14 @@ export type RuleField =
   | "odds";
 export type RuleOperator = ">" | ">=" | "<" | "<=" | "==";
 export type RuleLogic = "ALL" | "ANY";
+export type RuleCondition = {
+  field: RuleField;
+  operator: RuleOperator;
+  value: string;
+};
+export type RuleConditionGroup = {
+  conditions: RuleCondition[];
+};
 export type ConditionType =
   | "Country/State"
   | "Single deposit"
@@ -40,12 +48,13 @@ export type ConditionType =
 export type Rule = {
   id: string;
   eventType: EventType;
-  conditions?: Array<{
-    field: RuleField;
-    operator: RuleOperator;
-    value: string;
-  }>;
+  // Simple mode: flat list of conditions combined by conditionLogic.
+  conditions?: RuleCondition[];
   conditionLogic?: RuleLogic;
+  // Advanced mode: multiple condition groups combined by groupLogic.
+  // Within each group we use AND semantics.
+  conditionGroups?: RuleConditionGroup[];
+  groupLogic?: RuleLogic;
   field: RuleField;
   operator: RuleOperator;
   value: string;

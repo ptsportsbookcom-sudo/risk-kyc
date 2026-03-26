@@ -124,6 +124,18 @@ export default function SimulatorPage() {
       );
     };
 
+    if (rule.conditionGroups && rule.conditionGroups.length > 0) {
+      const groupPasses = rule.conditionGroups.map((group) =>
+        group.conditions.every((condition) =>
+          evaluateCondition(condition as { field: string; operator: string; value: string })
+        )
+      );
+
+      return (rule.groupLogic ?? "ALL") === "ANY"
+        ? groupPasses.some(Boolean)
+        : groupPasses.every(Boolean);
+    }
+
     if ((rule.conditionLogic ?? "ALL") === "ANY") {
       return normalizedConditions.some(evaluateCondition);
     }
