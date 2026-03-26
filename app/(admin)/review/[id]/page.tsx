@@ -8,7 +8,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
-import { getRequiredLevel, usePlayers } from "@/app/components/players-context";
+import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -113,7 +113,7 @@ export default function CaseDetailsPage() {
           <InfoItem label="Username" value={selectedCase.username} />
           <InfoItem
             label="KYC Level"
-            value={player?.kycLevel ?? getRequiredLevel(selectedCase.verificationRequired)}
+            value={player?.kycLevel ?? "N/A"}
           />
           <InfoItem label="Created date" value={selectedCase.createdDate} />
         </div>

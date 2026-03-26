@@ -4,7 +4,7 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 import { RestrictionType } from "@/app/components/rules-context";
 import { VerificationType } from "@/app/components/kyc-cases-context";
 
-export type KycLevel = "L0" | "L1" | "L2" | "L3";
+export type KycLevel = "L0" | "L2" | "L3";
 export type PlayerLimits = {
   maxDeposit: number | null;
   canWithdraw: boolean;
@@ -44,12 +44,11 @@ type PlayersContextValue = {
 const PLAYERS_STORAGE_KEY = "kyc_players";
 const levelRank: Record<KycLevel, number> = {
   L0: 0,
-  L1: 1,
   L2: 2,
   L3: 3,
 };
 
-export function getRequiredLevel(verificationRequired: VerificationType[]): KycLevel {
+export function getKycLevel(verificationRequired: VerificationType[]): KycLevel {
   if (verificationRequired.includes("Full KYC")) {
     return "L3";
   }
@@ -60,7 +59,7 @@ export function getRequiredLevel(verificationRequired: VerificationType[]): KycL
   ) {
     return "L2";
   }
-  return "L1";
+  return "L0";
 }
 
 export function getLimitsForLevel(kycLevel: KycLevel): PlayerLimits {
@@ -138,10 +137,10 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       flags: [],
     };
 
-    const requiredLevel = getRequiredLevel(input.verificationRequired);
+    const newLevel = getKycLevel(input.verificationRequired);
     const nextLevel =
-      levelRank[requiredLevel] > levelRank[current.kycLevel]
-        ? requiredLevel
+      levelRank[newLevel] > levelRank[current.kycLevel]
+        ? newLevel
         : current.kycLevel;
 
     const mergedRestrictions = Array.from(

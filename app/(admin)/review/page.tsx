@@ -7,7 +7,7 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
-import { getRequiredLevel, usePlayers } from "@/app/components/players-context";
+import { usePlayers } from "@/app/components/players-context";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -183,7 +183,7 @@ export default function ReviewPage() {
                     {row.verificationRequired.join(", ")}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {player?.kycLevel ?? getRequiredLevel(row.verificationRequired)}
+                    {player?.kycLevel ?? "N/A"}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span
