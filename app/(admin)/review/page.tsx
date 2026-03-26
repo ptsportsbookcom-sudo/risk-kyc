@@ -183,10 +183,24 @@ export default function ReviewPage() {
                         <span className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
                           Manual
                         </span>
+                      ) : row.source === "self-exclusion" ? (
+                        <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+                          Source: Self-Exclusion
+                        </span>
                       ) : null}
                     </div>
                     {row.reason ? (
                       <p className="mt-1 text-xs text-slate-500">Reason: {row.reason}</p>
+                    ) : null}
+                    {row.source === "self-exclusion" ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Duration: {row.selfExclusionDuration ?? "Permanent"}
+                        {" | "}
+                        Until:{" "}
+                        {row.selfExclusionUntil
+                          ? new Date(row.selfExclusionUntil).toLocaleString()
+                          : "Permanent"}
+                      </p>
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">

@@ -7,7 +7,10 @@ import {
 } from "@/app/components/kyc-cases-context";
 import { canUserPerformAction } from "@/app/components/enforcement";
 import { runRulesEngine } from "@/app/components/rules-engine";
-import { usePlayers } from "@/app/components/players-context";
+import {
+  SelfExclusionDuration,
+  usePlayers,
+} from "@/app/components/players-context";
 import { EventType, RestrictionType, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
@@ -23,6 +26,9 @@ type SimulationResult = {
   finalFlags: string;
   detectedFraudSignals: string;
   activeRestriction: string;
+  selfExclusionStatus: string;
+  selfExclusionReason: string;
+  selfExclusionUntil: string;
 };
 
 const initialResult: SimulationResult = {
@@ -38,12 +44,20 @@ const initialResult: SimulationResult = {
   finalFlags: "None",
   detectedFraudSignals: "None",
   activeRestriction: "None",
+  selfExclusionStatus: "Not active",
+  selfExclusionReason: "None",
+  selfExclusionUntil: "N/A",
 };
 
 export default function SimulatorPage() {
   const { rules } = useRules();
   const { addCase } = useKycCases();
-  const { applyTriggerToPlayer, getPlayerById } = usePlayers();
+  const {
+    applyTriggerToPlayer,
+    applySelfExclusion,
+    clearExpiredSelfExclusion,
+    getPlayerById,
+  } = usePlayers();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [eventType, setEventType] = useState<EventType>("Registration");
@@ -61,14 +75,19 @@ export default function SimulatorPage() {
   const [betAmount, setBetAmount] = useState("");
   const [odds, setOdds] = useState("");
   const [isLive, setIsLive] = useState(false);
+  const [selfExclusionDuration, setSelfExclusionDuration] =
+    useState<SelfExclusionDuration>("24h");
+  const [selfExclusionReason, setSelfExclusionReason] = useState("");
   const [result, setResult] = useState<SimulationResult>(initialResult);
   const [actionCheckResult, setActionCheckResult] = useState("");
+  const [activePlayerId, setActivePlayerId] = useState("");
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
     const normalizedUsername = username.trim() || "simulated_user";
+    setActivePlayerId(normalizedUserId);
     const existingPlayer = getPlayerById(normalizedUserId);
 
     const simulation = {
@@ -140,6 +159,9 @@ export default function SimulatorPage() {
             ? engineResult.detectedFraudSignals.join(", ")
             : "None",
         activeRestriction: engineResult.finalDecision.restriction ?? "None",
+        selfExclusionStatus: "Not active",
+        selfExclusionReason: "None",
+        selfExclusionUntil: "N/A",
       });
       setActionCheckResult("");
       return;
@@ -222,21 +244,90 @@ export default function SimulatorPage() {
           ? engineResult.detectedFraudSignals.join(", ")
           : "None",
       activeRestriction: engineResult.finalDecision.restriction ?? "None",
+      selfExclusionStatus: "Not active",
+      selfExclusionReason: "None",
+      selfExclusionUntil: "N/A",
     });
     setActionCheckResult("");
   };
 
   const tryAction = (action: "deposit" | "withdrawal" | "casino") => {
+    const latestPlayer = activePlayerId ? clearExpiredSelfExclusion(activePlayerId) : undefined;
     const restriction =
-      result.activeRestriction !== "None"
-        ? (result.activeRestriction as RestrictionType)
-        : null;
-    const allowed = canUserPerformAction({ restriction }, action);
+      activePlayerId && latestPlayer
+        ? latestPlayer.restriction
+        : result.activeRestriction !== "None"
+          ? (result.activeRestriction as RestrictionType)
+          : null;
+    const allowed = canUserPerformAction(
+      {
+        restriction,
+        isSelfExcluded: latestPlayer?.isSelfExcluded ?? false,
+        selfExclusionUntil: latestPlayer?.selfExclusionUntil ?? null,
+      },
+      action
+    );
     setActionCheckResult(
       allowed
         ? "Allowed"
         : `Blocked due to ${restriction ?? "restriction"}`
     );
+    if (activePlayerId && latestPlayer) {
+      setResult((currentResult) => ({
+        ...currentResult,
+        activeRestriction: latestPlayer.restriction ?? "None",
+        selfExclusionStatus: latestPlayer.isSelfExcluded ? "Active" : "Expired",
+        selfExclusionReason: latestPlayer.selfExclusionReason || "None",
+        selfExclusionUntil:
+          latestPlayer.selfExclusionUntil === null
+            ? latestPlayer.isSelfExcluded
+              ? "Permanent"
+              : "N/A"
+            : new Date(latestPlayer.selfExclusionUntil).toLocaleString(),
+      }));
+    }
+  };
+
+  const applySelfExclusionAction = () => {
+    const normalizedUserId = userId.trim() || `SIM-${Date.now()}`;
+    const normalizedUsername = username.trim() || "simulated_user";
+    const reason = selfExclusionReason.trim() || "User-requested self-exclusion";
+    const updatedPlayer = applySelfExclusion({
+      id: normalizedUserId,
+      username: normalizedUsername,
+      duration: selfExclusionDuration,
+      reason,
+    });
+    setActivePlayerId(normalizedUserId);
+    const untilLabel =
+      updatedPlayer.selfExclusionUntil === null
+        ? "Permanent"
+        : new Date(updatedPlayer.selfExclusionUntil).toLocaleString();
+
+    addCase({
+      userId: normalizedUserId,
+      username: normalizedUsername,
+      verificationRequired: [],
+      kycLevel: updatedPlayer.kycLevel,
+      restrictions: ["Full Account Block"],
+      source: "self-exclusion",
+      reason,
+      selfExclusionDuration: selfExclusionDuration,
+      selfExclusionUntil:
+        updatedPlayer.selfExclusionUntil === null
+          ? null
+          : new Date(updatedPlayer.selfExclusionUntil).toISOString(),
+    });
+
+    setResult((currentResult) => ({
+      ...currentResult,
+      activeRestriction: "Full Account Block",
+      selfExclusionStatus: "Active",
+      selfExclusionReason: reason,
+      selfExclusionUntil: untilLabel,
+      createdCaseStatus: "1 case created (Pending)",
+    }));
+    setActionCheckResult("Blocked due to Full Account Block");
   };
 
   return (
@@ -489,11 +580,61 @@ export default function SimulatorPage() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h4 className="text-base font-semibold text-slate-900">Self-Exclusion</h4>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">Duration</label>
+            <select
+              value={selfExclusionDuration}
+              onChange={(event) =>
+                setSelfExclusionDuration(event.target.value as SelfExclusionDuration)
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+            >
+              <option value="24h">24h</option>
+              <option value="7d">7d</option>
+              <option value="30d">30d</option>
+              <option value="permanent">Permanent</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">Reason</label>
+            <input
+              type="text"
+              value={selfExclusionReason}
+              onChange={(event) => setSelfExclusionReason(event.target.value)}
+              placeholder="e.g. Personal safety break"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={applySelfExclusionAction}
+            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
+          >
+            Apply Self-Exclusion
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 className="text-base font-semibold text-slate-900">Simulation Results</h4>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <ResultItem label="Triggered action" value={result.triggeredAction} />
           <ResultItem label="Created case status" value={result.createdCaseStatus} />
           <ResultItem label="Active Restriction" value={result.activeRestriction} />
+        </div>
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Self-Exclusion Status
+          </p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <ResultItem label="Status" value={result.selfExclusionStatus} />
+            <ResultItem label="Reason" value={result.selfExclusionReason} />
+            <ResultItem label="Until" value={result.selfExclusionUntil} />
+          </div>
         </div>
 
         <div className="mt-4">

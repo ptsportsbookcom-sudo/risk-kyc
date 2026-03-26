@@ -18,6 +18,9 @@ export type Player = {
   limits: PlayerLimits;
   restriction: RestrictionType | null;
   restrictions: RestrictionType[];
+  isSelfExcluded: boolean;
+  selfExclusionReason: string;
+  selfExclusionUntil: number | null;
   flags: string[];
   deviceCount: number;
   ipCountry: string;
@@ -30,6 +33,8 @@ export type Player = {
   betCountLastMinute: number;
   bonusesUsed: number;
 };
+
+export type SelfExclusionDuration = "24h" | "7d" | "30d" | "permanent";
 
 type ApplyTriggerInput = {
   id: string;
@@ -64,6 +69,13 @@ type ApplyTriggerResult = {
 type PlayersContextValue = {
   players: Player[];
   applyTriggerToPlayer: (input: ApplyTriggerInput) => ApplyTriggerResult;
+  applySelfExclusion: (input: {
+    id: string;
+    username: string;
+    duration: SelfExclusionDuration;
+    reason: string;
+  }) => Player;
+  clearExpiredSelfExclusion: (id: string) => Player | undefined;
   getPlayerById: (id: string) => Player | undefined;
 };
 
@@ -129,6 +141,12 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
             limits: getLimitsForLevel(player.kycLevel),
             restriction: (player.restriction as RestrictionType | null) ?? null,
             restrictions: Array.isArray(player.restrictions) ? player.restrictions : [],
+            isSelfExcluded: Boolean(player.isSelfExcluded ?? false),
+            selfExclusionReason: player.selfExclusionReason ?? "",
+            selfExclusionUntil:
+              typeof player.selfExclusionUntil === "number"
+                ? player.selfExclusionUntil
+                : null,
             flags: Array.isArray(player.flags) ? player.flags : [],
             deviceCount: Number(player.deviceCount ?? 1),
             ipCountry: player.ipCountry ?? "",
@@ -167,6 +185,9 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       limits: getLimitsForLevel("L0"),
       restriction: null,
       restrictions: [],
+      isSelfExcluded: false,
+      selfExclusionReason: "",
+      selfExclusionUntil: null,
       flags: [],
       deviceCount: 1,
       ipCountry: "",
@@ -199,8 +220,13 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       username: input.username || current.username,
       kycLevel: nextLevel,
       limits: getLimitsForLevel(nextLevel),
-      restriction: input.restrictions[0] ?? current.restriction,
+      restriction: current.isSelfExcluded
+        ? "Full Account Block"
+        : input.restrictions[0] ?? current.restriction,
       restrictions: mergedRestrictions,
+      isSelfExcluded: current.isSelfExcluded,
+      selfExclusionReason: current.selfExclusionReason,
+      selfExclusionUntil: current.selfExclusionUntil,
       flags: mergedFlags,
       deviceCount: input.playerSnapshot?.deviceCount ?? current.deviceCount,
       ipCountry: input.playerSnapshot?.ipCountry ?? current.ipCountry,
@@ -236,10 +262,100 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  const applySelfExclusion = (input: {
+    id: string;
+    username: string;
+    duration: SelfExclusionDuration;
+    reason: string;
+  }) => {
+    const now = Date.now();
+    const durationMsByValue: Record<Exclude<SelfExclusionDuration, "permanent">, number> = {
+      "24h": 24 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000,
+      "30d": 30 * 24 * 60 * 60 * 1000,
+    };
+    const existing = players.find((player) => player.id === input.id);
+    const current: Player = existing ?? {
+      id: input.id,
+      username: input.username,
+      kycLevel: "L0",
+      limits: getLimitsForLevel("L0"),
+      restriction: null,
+      restrictions: [],
+      isSelfExcluded: false,
+      selfExclusionReason: "",
+      selfExclusionUntil: null,
+      flags: [],
+      deviceCount: 1,
+      ipCountry: "",
+      accountCountry: "",
+      totalDeposits: 0,
+      depositCount: 0,
+      withdrawalCount: 0,
+      lastDepositTimestamp: 0,
+      lastBetTimestamp: 0,
+      betCountLastMinute: 0,
+      bonusesUsed: 0,
+    };
+    const selfExclusionUntil =
+      input.duration === "permanent" ? null : now + durationMsByValue[input.duration];
+
+    const updatedPlayer: Player = {
+      ...current,
+      username: input.username || current.username,
+      restriction: "Full Account Block",
+      restrictions: Array.from(new Set([...current.restrictions, "Full Account Block"])),
+      isSelfExcluded: true,
+      selfExclusionReason: input.reason,
+      selfExclusionUntil,
+    };
+
+    setPlayers((currentPlayers) => {
+      const idx = currentPlayers.findIndex((player) => player.id === input.id);
+      if (idx === -1) {
+        return [updatedPlayer, ...currentPlayers];
+      }
+      return currentPlayers.map((player) =>
+        player.id === input.id ? updatedPlayer : player
+      );
+    });
+
+    return updatedPlayer;
+  };
+
+  const clearExpiredSelfExclusion = (id: string) => {
+    const current = players.find((player) => player.id === id);
+    if (!current) return undefined;
+    if (!current.isSelfExcluded || current.selfExclusionUntil === null) return current;
+    if (Date.now() <= current.selfExclusionUntil) return current;
+
+    const updatedPlayer: Player = {
+      ...current,
+      isSelfExcluded: false,
+      selfExclusionReason: "",
+      selfExclusionUntil: null,
+      restriction: current.restriction === "Full Account Block" ? null : current.restriction,
+    };
+
+    setPlayers((currentPlayers) =>
+      currentPlayers.map((player) => (player.id === id ? updatedPlayer : player))
+    );
+
+    return updatedPlayer;
+  };
+
   const getPlayerById = (id: string) => players.find((player) => player.id === id);
 
   return (
-    <PlayersContext.Provider value={{ players, applyTriggerToPlayer, getPlayerById }}>
+    <PlayersContext.Provider
+      value={{
+        players,
+        applyTriggerToPlayer,
+        applySelfExclusion,
+        clearExpiredSelfExclusion,
+        getPlayerById,
+      }}
+    >
       {children}
     </PlayersContext.Provider>
   );

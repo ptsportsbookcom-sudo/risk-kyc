@@ -26,7 +26,7 @@ function toRestrictionType(value: string | null | undefined): RestrictionType | 
 export default function PlayerActionsPage() {
   const router = useRouter();
   const { cases } = useKycCases();
-  const { getPlayerById } = usePlayers();
+  const { clearExpiredSelfExclusion, getPlayerById } = usePlayers();
   const [message, setMessage] = useState("");
   const [depositAmount, setDepositAmount] = useState("50");
 
@@ -37,8 +37,15 @@ export default function PlayerActionsPage() {
 
   const tryAction = (action: PlayerAction) => {
     setMessage("");
+    const refreshedPlayer =
+      pendingCase?.userId ? clearExpiredSelfExclusion(pendingCase.userId) : player;
+    const enforcementPlayer = {
+      restriction: refreshedPlayer?.restriction ?? restriction,
+      isSelfExcluded: refreshedPlayer?.isSelfExcluded ?? false,
+      selfExclusionUntil: refreshedPlayer?.selfExclusionUntil ?? null,
+    };
 
-    if (!canUserPerformAction({ restriction }, "withdrawal") && action === "Withdraw") {
+    if (!canUserPerformAction(enforcementPlayer, "withdrawal") && action === "Withdraw") {
       setMessage("Action blocked: Complete verification to withdraw.");
       router.push(
         "/player?reason=Complete%20verification%20to%20withdraw"
@@ -46,13 +53,13 @@ export default function PlayerActionsPage() {
       return;
     }
 
-    if (!canUserPerformAction({ restriction }, "deposit") && action === "Deposit") {
+    if (!canUserPerformAction(enforcementPlayer, "deposit") && action === "Deposit") {
       setMessage("Action blocked: Complete verification to deposit.");
       router.push("/player?reason=Complete%20verification%20to%20deposit");
       return;
     }
 
-    if (!canUserPerformAction({ restriction }, "casino") && action === "Play Casino") {
+    if (!canUserPerformAction(enforcementPlayer, "casino") && action === "Play Casino") {
       setMessage("Action blocked: Complete verification to play casino.");
       router.push("/player?reason=Complete%20verification%20to%20play%20casino");
       return;

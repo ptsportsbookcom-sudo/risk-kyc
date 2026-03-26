@@ -29,8 +29,10 @@ export type KycCase = {
   status: ReviewStatus;
   createdDate: string;
   createdAt?: string;
-  source?: "manual" | "simulation";
+  source?: "manual" | "simulation" | "self-exclusion";
   reason?: string;
+  selfExclusionDuration?: string;
+  selfExclusionUntil?: string | null;
   restrictions: string[];
   flags?: string[];
   documents: KycDocument[];
@@ -43,8 +45,10 @@ type CreateKycCaseInput = {
   kycLevel?: KycLevel;
   restrictions: string[];
   flags?: string[];
-  source?: "manual" | "simulation";
+  source?: "manual" | "simulation" | "self-exclusion";
   reason?: string;
+  selfExclusionDuration?: string;
+  selfExclusionUntil?: string | null;
   createdAt?: string;
   status?: ReviewStatus;
 };
@@ -161,6 +165,8 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         createdAt: input.createdAt ?? now.toISOString(),
         source: input.source ?? "simulation",
         reason: input.reason,
+        selfExclusionDuration: input.selfExclusionDuration,
+        selfExclusionUntil: input.selfExclusionUntil,
         restrictions: input.restrictions,
         flags: input.flags ?? [],
         documents: [],
