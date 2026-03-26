@@ -18,6 +18,16 @@ export type Player = {
   limits: PlayerLimits;
   restrictions: RestrictionType[];
   flags: string[];
+  deviceCount: number;
+  ipCountry: string;
+  accountCountry: string;
+  totalDeposits: number;
+  depositCount: number;
+  withdrawalCount: number;
+  lastDepositTimestamp: number;
+  lastBetTimestamp: number;
+  betCountLastMinute: number;
+  bonusesUsed: number;
 };
 
 type ApplyTriggerInput = {
@@ -26,6 +36,21 @@ type ApplyTriggerInput = {
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];
   flags?: string[];
+  playerSnapshot?: Partial<
+    Pick<
+      Player,
+      | "deviceCount"
+      | "ipCountry"
+      | "accountCountry"
+      | "totalDeposits"
+      | "depositCount"
+      | "withdrawalCount"
+      | "lastDepositTimestamp"
+      | "lastBetTimestamp"
+      | "betCountLastMinute"
+      | "bonusesUsed"
+    >
+  >;
 };
 
 type ApplyTriggerResult = {
@@ -108,6 +133,16 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
             limits: getLimitsForLevel(player.kycLevel),
             restrictions: Array.isArray(player.restrictions) ? player.restrictions : [],
             flags: Array.isArray(player.flags) ? player.flags : [],
+            deviceCount: Number(player.deviceCount ?? 1),
+            ipCountry: player.ipCountry ?? "",
+            accountCountry: player.accountCountry ?? "",
+            totalDeposits: Number(player.totalDeposits ?? 0),
+            depositCount: Number(player.depositCount ?? 0),
+            withdrawalCount: Number(player.withdrawalCount ?? 0),
+            lastDepositTimestamp: Number(player.lastDepositTimestamp ?? 0),
+            lastBetTimestamp: Number(player.lastBetTimestamp ?? 0),
+            betCountLastMinute: Number(player.betCountLastMinute ?? 0),
+            bonusesUsed: Number(player.bonusesUsed ?? 0),
           }))
         : [];
       setPlayers(normalizedPlayers);
@@ -135,6 +170,16 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       limits: getLimitsForLevel("L0"),
       restrictions: [],
       flags: [],
+      deviceCount: 1,
+      ipCountry: "",
+      accountCountry: "",
+      totalDeposits: 0,
+      depositCount: 0,
+      withdrawalCount: 0,
+      lastDepositTimestamp: 0,
+      lastBetTimestamp: 0,
+      betCountLastMinute: 0,
+      bonusesUsed: 0,
     };
 
     const newLevel = getKycLevel(input.verificationRequired);
@@ -158,6 +203,19 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       limits: getLimitsForLevel(nextLevel),
       restrictions: mergedRestrictions,
       flags: mergedFlags,
+      deviceCount: input.playerSnapshot?.deviceCount ?? current.deviceCount,
+      ipCountry: input.playerSnapshot?.ipCountry ?? current.ipCountry,
+      accountCountry: input.playerSnapshot?.accountCountry ?? current.accountCountry,
+      totalDeposits: input.playerSnapshot?.totalDeposits ?? current.totalDeposits,
+      depositCount: input.playerSnapshot?.depositCount ?? current.depositCount,
+      withdrawalCount: input.playerSnapshot?.withdrawalCount ?? current.withdrawalCount,
+      lastDepositTimestamp:
+        input.playerSnapshot?.lastDepositTimestamp ?? current.lastDepositTimestamp,
+      lastBetTimestamp:
+        input.playerSnapshot?.lastBetTimestamp ?? current.lastBetTimestamp,
+      betCountLastMinute:
+        input.playerSnapshot?.betCountLastMinute ?? current.betCountLastMinute,
+      bonusesUsed: input.playerSnapshot?.bonusesUsed ?? current.bonusesUsed,
     };
 
     setPlayers((currentPlayers) => {

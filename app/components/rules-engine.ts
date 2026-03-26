@@ -1,17 +1,28 @@
 "use client";
 
 import { Rule } from "@/app/components/rules-context";
+import { getFraudSignals } from "@/app/components/fraud-signals";
 
 export type RulesEngineInput = {
   eventType: string;
   playerData: {
     depositAmount: number;
     withdrawalAmount: number;
+    totalDeposits: number;
+    depositCount: number;
+    withdrawalCount: number;
+    lastDepositTimestamp: number;
+    lastBetTimestamp: number;
+    betCountLastMinute: number;
     bonusesUsed: number;
     country: string;
+    ipCountry: string;
+    accountCountry: string;
+    deviceCount: number;
     kycLevel: string;
     betAmount: number;
     odds: number;
+    flags?: string[];
   };
   rules: Rule[];
 };
@@ -37,6 +48,7 @@ export type RulesEngineResult = {
       flags: string[];
     };
   };
+  detectedFraudSignals: string[];
 };
 
 export type AggregatedActionsInput = {
@@ -111,12 +123,28 @@ function evaluateCondition(
   const valueByField: Record<string, number | string> = {
     depositAmount: playerData.depositAmount,
     withdrawalAmount: playerData.withdrawalAmount,
+    totalDeposits: playerData.totalDeposits,
+    depositCount: playerData.depositCount,
+    withdrawalCount: playerData.withdrawalCount,
+    lastDepositTimestamp: playerData.lastDepositTimestamp,
+    lastBetTimestamp: playerData.lastBetTimestamp,
+    betCountLastMinute: playerData.betCountLastMinute,
     bonusesUsed: playerData.bonusesUsed,
     country: playerData.country,
+    ipCountry: playerData.ipCountry,
+    accountCountry: playerData.accountCountry,
+    deviceCount: playerData.deviceCount,
     kycLevel: playerData.kycLevel,
     betAmount: playerData.betAmount,
     odds: playerData.odds,
   };
+
+  if (condition.field === "flags") {
+    const flags = Array.isArray(playerData.flags) ? playerData.flags : [];
+    if (condition.operator === "==") return flags.includes(condition.value);
+    if (condition.operator === "!=") return !flags.includes(condition.value);
+    return false;
+  }
 
   const left = valueByField[condition.field];
   if (left === undefined) return false;
@@ -158,6 +186,7 @@ function getEmptyResult(): RulesEngineResult {
         flags: [],
       },
     },
+    detectedFraudSignals: [],
   };
 }
 
@@ -166,8 +195,42 @@ export function runRulesEngine({
   playerData,
   rules,
 }: RulesEngineInput): RulesEngineResult {
+  const detectedFraudSignals = getFraudSignals({
+    deviceCount: playerData.deviceCount,
+    ipCountry: playerData.ipCountry,
+    accountCountry: playerData.accountCountry,
+    totalDeposits: playerData.totalDeposits,
+    depositCount: playerData.depositCount,
+    withdrawalCount: playerData.withdrawalCount,
+    lastDepositTimestamp: playerData.lastDepositTimestamp,
+    lastBetTimestamp: playerData.lastBetTimestamp,
+    betCountLastMinute: playerData.betCountLastMinute,
+    bonusesUsed: playerData.bonusesUsed,
+  }).flags;
+
+  const playerDataWithSignals = {
+    ...playerData,
+    flags: Array.from(new Set([...(playerData.flags ?? []), ...detectedFraudSignals])),
+  };
+
   if (!Array.isArray(rules) || rules.length === 0) {
-    return getEmptyResult();
+    const empty = getEmptyResult();
+    const resolved = resolveAggregatedActions({
+      verifications: [],
+      restrictions: [],
+      flags: detectedFraudSignals,
+    });
+    return {
+      ...empty,
+      flags: resolved.flags,
+      aggregatedActions: resolved.aggregatedActions,
+      finalDecision: {
+        ...empty.finalDecision,
+        flags: resolved.flags,
+        aggregatedActions: resolved.aggregatedActions,
+      },
+      detectedFraudSignals,
+    };
   }
 
   const eligibleRules = rules
@@ -176,7 +239,23 @@ export function runRulesEngine({
     .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100));
 
   if (eligibleRules.length === 0) {
-    return getEmptyResult();
+    const empty = getEmptyResult();
+    const resolved = resolveAggregatedActions({
+      verifications: [],
+      restrictions: [],
+      flags: detectedFraudSignals,
+    });
+    return {
+      ...empty,
+      flags: resolved.flags,
+      aggregatedActions: resolved.aggregatedActions,
+      finalDecision: {
+        ...empty.finalDecision,
+        flags: resolved.flags,
+        aggregatedActions: resolved.aggregatedActions,
+      },
+      detectedFraudSignals,
+    };
   }
 
   const verificationSet = new Set<string>();
@@ -185,7 +264,7 @@ export function runRulesEngine({
   const triggeredRules: RulesEngineResult["triggeredRules"] = [];
 
   for (const rule of eligibleRules) {
-    if (!doesRuleMatch(rule, playerData)) continue;
+    if (!doesRuleMatch(rule, playerDataWithSignals)) continue;
 
     triggeredRules.push({
       id: rule.id,
@@ -209,7 +288,7 @@ export function runRulesEngine({
   const aggregatedActions = {
     verifications: Array.from(verificationSet),
     restrictions: Array.from(restrictionSet),
-    flags: Array.from(flagSet),
+    flags: Array.from(new Set([...flagSet, ...detectedFraudSignals])),
   };
 
   const resolved = resolveAggregatedActions(aggregatedActions);
@@ -228,6 +307,7 @@ export function runRulesEngine({
     flags: aggregatedActions.flags,
     aggregatedActions,
     finalDecision,
+    detectedFraudSignals,
   };
 }
 

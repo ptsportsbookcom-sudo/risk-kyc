@@ -19,13 +19,21 @@ export type EventType =
 export type RuleField =
   | "country"
   | "kycLevel"
-  | "state"
+  | "ipCountry"
+  | "accountCountry"
+  | "deviceCount"
   | "depositAmount"
   | "withdrawalAmount"
+  | "totalDeposits"
+  | "depositCount"
+  | "withdrawalCount"
+  | "lastDepositTimestamp"
+  | "lastBetTimestamp"
+  | "betCountLastMinute"
   | "bonusesUsed"
   | "betAmount"
   | "odds"
-  | "isLive";
+  | "flags";
 export type RuleOperator = ">" | ">=" | "<" | "<=" | "==" | "!=";
 export type RuleLogic = "ALL" | "ANY";
 
@@ -33,7 +41,8 @@ export type RuleConditionCategory =
   | "Transaction"
   | "Player"
   | "Bonus"
-  | "Betting";
+  | "Betting"
+  | "Risk";
 
 export type RuleCondition = {
   // Optional for backward compatibility with previously-saved rules.

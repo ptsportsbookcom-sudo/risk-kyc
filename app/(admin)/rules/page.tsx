@@ -34,7 +34,7 @@ const flagOptions = [
 
 function getAllowedCategories(triggerEvent: EventType): RuleConditionCategory[] {
   void triggerEvent;
-  return ["Transaction", "Player", "Bonus", "Betting"];
+  return ["Transaction", "Player", "Bonus", "Betting", "Risk"];
 }
 
 function getAllowedFieldsForCategory(
@@ -42,10 +42,20 @@ function getAllowedFieldsForCategory(
   category: RuleConditionCategory
 ): RuleField[] {
   void triggerEvent;
-  if (category === "Player") return ["country", "kycLevel"];
-  if (category === "Transaction") return ["depositAmount", "withdrawalAmount"];
+  if (category === "Player")
+    return ["country", "kycLevel", "ipCountry", "accountCountry", "deviceCount"];
+  if (category === "Transaction")
+    return [
+      "depositAmount",
+      "withdrawalAmount",
+      "totalDeposits",
+      "depositCount",
+      "withdrawalCount",
+      "lastDepositTimestamp",
+    ];
   if (category === "Bonus") return ["bonusesUsed"];
-  if (category === "Betting") return ["betAmount", "odds"];
+  if (category === "Betting") return ["betAmount", "odds", "lastBetTimestamp", "betCountLastMinute"];
+  if (category === "Risk") return ["flags"];
   return [];
 }
 
@@ -61,8 +71,7 @@ function getDefaultConditionForEvent(triggerEvent: EventType) {
 
   const fields = getAllowedFieldsForCategory(triggerEvent, defaultCategory);
   const defaultField = fields[0] ?? "country";
-  const defaultOperator: RuleOperator =
-    defaultField === "country" || defaultField === "kycLevel" ? "==" : ">";
+  const defaultOperator: RuleOperator = isEqualityField(defaultField) ? "==" : ">";
 
   return {
     category: defaultCategory as RuleConditionCategory,
@@ -74,16 +83,29 @@ function getDefaultConditionForEvent(triggerEvent: EventType) {
 
 function isNumericField(field: RuleField) {
   return (
+    field === "deviceCount" ||
     field === "depositAmount" ||
     field === "withdrawalAmount" ||
+    field === "totalDeposits" ||
+    field === "depositCount" ||
+    field === "withdrawalCount" ||
+    field === "lastDepositTimestamp" ||
+    field === "lastBetTimestamp" ||
+    field === "betCountLastMinute" ||
     field === "bonusesUsed" ||
     field === "betAmount" ||
     field === "odds"
   );
 }
 
-function isBooleanField(field: RuleField) {
-  return field === "isLive";
+function isEqualityField(field: RuleField) {
+  return (
+    field === "country" ||
+    field === "kycLevel" ||
+    field === "ipCountry" ||
+    field === "accountCountry" ||
+    field === "flags"
+  );
 }
 
 function formatActionListLabel(items: string[]) {
@@ -482,9 +504,7 @@ export default function RulesPage() {
 
                     const valueInputType = isNumericField(condition.field)
                       ? "number"
-                      : isBooleanField(condition.field)
-                        ? "text"
-                        : "text";
+                      : "text";
 
                     return (
                       <div
@@ -520,11 +540,9 @@ export default function RulesPage() {
                                 nextCategory
                               );
                               const nextField = nextFields[0] ?? condition.field;
-                              const nextOperator: RuleOperator =
-                                nextField === "country" ||
-                                nextField === "kycLevel"
-                                  ? "=="
-                                  : ">";
+                              const nextOperator: RuleOperator = isEqualityField(nextField)
+                                ? "=="
+                                : ">";
                               updateConditionRow(groupIndex, {
                                 category: nextCategory,
                                 field: nextField,
@@ -546,11 +564,9 @@ export default function RulesPage() {
                             onChange={(event) => {
                               const nextField =
                                 event.target.value as RuleField;
-                              const nextOperator: RuleOperator =
-                                nextField === "country" ||
-                                nextField === "kycLevel"
-                                  ? "=="
-                                  : ">";
+                              const nextOperator: RuleOperator = isEqualityField(nextField)
+                                ? "=="
+                                : ">";
                               updateConditionRow(groupIndex, {
                                 field: nextField,
                                 operator: nextOperator,
@@ -601,8 +617,8 @@ export default function RulesPage() {
                             placeholder={
                               isNumericField(condition.field)
                                 ? "0"
-                                : isBooleanField(condition.field)
-                                  ? "true/false"
+                                : isEqualityField(condition.field)
+                                  ? "e.g. value"
                                   : "e.g. United States"
                             }
                             min={isNumericField(condition.field) ? 0 : undefined}
@@ -649,9 +665,7 @@ export default function RulesPage() {
                         );
                         const valueInputType = isNumericField(condition.field)
                           ? "number"
-                          : isBooleanField(condition.field)
-                            ? "text"
-                            : "text";
+                          : "text";
                         return (
                           <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                             <p className="text-sm font-semibold text-slate-700">
@@ -668,11 +682,9 @@ export default function RulesPage() {
                                     nextCategory
                                   );
                                   const nextField = nextFields[0] ?? condition.field;
-                                  const nextOperator: RuleOperator =
-                                    nextField === "country" ||
-                                    nextField === "kycLevel"
-                                      ? "=="
-                                      : ">";
+                                  const nextOperator: RuleOperator = isEqualityField(nextField)
+                                    ? "=="
+                                    : ">";
                                   updateConditionRow(0, {
                                     category: nextCategory,
                                     field: nextField,
@@ -694,11 +706,9 @@ export default function RulesPage() {
                                 onChange={(event) => {
                                   const nextField =
                                     event.target.value as RuleField;
-                                  const nextOperator: RuleOperator =
-                                    nextField === "country" ||
-                                    nextField === "kycLevel"
-                                      ? "=="
-                                      : ">";
+                                  const nextOperator: RuleOperator = isEqualityField(nextField)
+                                    ? "=="
+                                    : ">";
                                   updateConditionRow(0, {
                                     field: nextField,
                                     operator: nextOperator,
@@ -741,8 +751,8 @@ export default function RulesPage() {
                                 placeholder={
                                   isNumericField(condition.field)
                                     ? "0"
-                                    : isBooleanField(condition.field)
-                                      ? "true/false"
+                                    : isEqualityField(condition.field)
+                                      ? "e.g. value"
                                       : "e.g. United States"
                                 }
                                 min={isNumericField(condition.field) ? 0 : undefined}
@@ -808,9 +818,7 @@ export default function RulesPage() {
 
                         const valueInputType = isNumericField(condition.field)
                           ? "number"
-                          : isBooleanField(condition.field)
-                            ? "text"
-                            : "text";
+                          : "text";
 
                         return (
                           <div
@@ -844,11 +852,9 @@ export default function RulesPage() {
                                     nextCategory
                                   );
                                   const nextField = nextFields[0] ?? condition.field;
-                                  const nextOperator: RuleOperator =
-                                    nextField === "country" ||
-                                    nextField === "kycLevel"
-                                      ? "=="
-                                      : ">";
+                                  const nextOperator: RuleOperator = isEqualityField(nextField)
+                                    ? "=="
+                                    : ">";
                                   updateConditionRow(groupIndex, {
                                     category: nextCategory,
                                     field: nextField,
@@ -870,11 +876,9 @@ export default function RulesPage() {
                                 onChange={(event) => {
                                   const nextField =
                                     event.target.value as RuleField;
-                                  const nextOperator: RuleOperator =
-                                    nextField === "country" ||
-                                    nextField === "kycLevel"
-                                      ? "=="
-                                      : ">";
+                                  const nextOperator: RuleOperator = isEqualityField(nextField)
+                                    ? "=="
+                                    : ">";
                                   updateConditionRow(groupIndex, {
                                     field: nextField,
                                     operator: nextOperator,
@@ -927,8 +931,8 @@ export default function RulesPage() {
                                 placeholder={
                                   isNumericField(condition.field)
                                     ? "0"
-                                    : isBooleanField(condition.field)
-                                      ? "true/false"
+                                    : isEqualityField(condition.field)
+                                      ? "e.g. value"
                                       : "e.g. United States"
                                 }
                                 min={

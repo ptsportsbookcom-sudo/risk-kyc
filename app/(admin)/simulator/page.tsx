@@ -19,6 +19,7 @@ type SimulationResult = {
   finalVerification: string;
   finalRestriction: string;
   finalFlags: string;
+  detectedFraudSignals: string;
 };
 
 const initialResult: SimulationResult = {
@@ -31,6 +32,7 @@ const initialResult: SimulationResult = {
   finalVerification: "None",
   finalRestriction: "None",
   finalFlags: "None",
+  detectedFraudSignals: "None",
 };
 
 export default function SimulatorPage() {
@@ -42,6 +44,13 @@ export default function SimulatorPage() {
   const [eventType, setEventType] = useState<EventType>("Registration");
   const [country, setCountry] = useState("United States");
   const [state, setState] = useState("California");
+  const [deviceCount, setDeviceCount] = useState("");
+  const [ipCountry, setIpCountry] = useState("United States");
+  const [accountCountry, setAccountCountry] = useState("United States");
+  const [depositCount, setDepositCount] = useState("");
+  const [withdrawalCount, setWithdrawalCount] = useState("");
+  const [betCountLastMinute, setBetCountLastMinute] = useState("");
+  const [bonusesUsed, setBonusesUsed] = useState("");
   const [amount, setAmount] = useState("");
   const [count, setCount] = useState("");
   const [betAmount, setBetAmount] = useState("");
@@ -66,6 +75,16 @@ export default function SimulatorPage() {
       betAmount: Number(betAmount || 0),
       odds: Number(odds || 0),
       isLive,
+      deviceCount: Number(deviceCount || existingPlayer?.deviceCount || 1),
+      ipCountry,
+      accountCountry,
+      totalDeposits: Number(amount || 0),
+      depositCount: Number(depositCount || 0),
+      withdrawalCount: Number(withdrawalCount || 0),
+      lastDepositTimestamp: Date.now(),
+      lastBetTimestamp: Date.now(),
+      betCountLastMinute: Number(betCountLastMinute || 0),
+      bonusesUsed: Number(bonusesUsed || 0),
     };
 
     const engineResult = runRulesEngine({
@@ -73,11 +92,21 @@ export default function SimulatorPage() {
       playerData: {
         depositAmount: simulation.depositAmount,
         withdrawalAmount: simulation.withdrawalAmount,
-        bonusesUsed: simulation.count,
+        totalDeposits: simulation.totalDeposits,
+        depositCount: simulation.depositCount,
+        withdrawalCount: simulation.withdrawalCount,
+        lastDepositTimestamp: simulation.lastDepositTimestamp,
+        lastBetTimestamp: simulation.lastBetTimestamp,
+        betCountLastMinute: simulation.betCountLastMinute,
+        bonusesUsed: simulation.bonusesUsed,
         country: simulation.country,
+        ipCountry: simulation.ipCountry,
+        accountCountry: simulation.accountCountry,
+        deviceCount: simulation.deviceCount,
         kycLevel: simulation.kycLevel,
         betAmount: simulation.betAmount,
         odds: simulation.odds,
+        flags: existingPlayer?.flags ?? [],
       },
       rules,
     });
@@ -89,10 +118,20 @@ export default function SimulatorPage() {
         createdCaseStatus: "No case created",
         aggregatedVerifications: "None",
         aggregatedRestrictions: "None",
-        aggregatedFlags: "None",
+        aggregatedFlags:
+          engineResult.aggregatedActions.flags.length > 0
+            ? engineResult.aggregatedActions.flags.join(", ")
+            : "None",
         finalVerification: "None",
         finalRestriction: "None",
-        finalFlags: "None",
+        finalFlags:
+          engineResult.finalDecision.flags.length > 0
+            ? engineResult.finalDecision.flags.join(", ")
+            : "None",
+        detectedFraudSignals:
+          engineResult.detectedFraudSignals.length > 0
+            ? engineResult.detectedFraudSignals.join(", ")
+            : "None",
       });
       return;
     }
@@ -112,6 +151,18 @@ export default function SimulatorPage() {
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
       flags: engineResult.finalDecision.flags,
+      playerSnapshot: {
+        deviceCount: simulation.deviceCount,
+        ipCountry: simulation.ipCountry,
+        accountCountry: simulation.accountCountry,
+        totalDeposits: simulation.totalDeposits,
+        depositCount: simulation.depositCount,
+        withdrawalCount: simulation.withdrawalCount,
+        lastDepositTimestamp: simulation.lastDepositTimestamp,
+        lastBetTimestamp: simulation.lastBetTimestamp,
+        betCountLastMinute: simulation.betCountLastMinute,
+        bonusesUsed: simulation.bonusesUsed,
+      },
     });
 
     let createdCases = 0;
@@ -153,6 +204,10 @@ export default function SimulatorPage() {
       finalFlags:
         engineResult.finalDecision.flags.length > 0
           ? engineResult.finalDecision.flags.join(", ")
+          : "None",
+      detectedFraudSignals:
+        engineResult.detectedFraudSignals.length > 0
+          ? engineResult.detectedFraudSignals.join(", ")
           : "None",
     });
   };
@@ -313,6 +368,88 @@ export default function SimulatorPage() {
             </div>
           ) : null}
 
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">deviceCount</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={deviceCount}
+                onChange={(event) => setDeviceCount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">ipCountry</label>
+              <input
+                type="text"
+                value={ipCountry}
+                onChange={(event) => setIpCountry(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">accountCountry</label>
+              <input
+                type="text"
+                value={accountCountry}
+                onChange={(event) => setAccountCountry(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">depositCount</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={depositCount}
+                onChange={(event) => setDepositCount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">withdrawalCount</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={withdrawalCount}
+                onChange={(event) => setWithdrawalCount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">
+                betCountLastMinute
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={betCountLastMinute}
+                onChange={(event) => setBetCountLastMinute(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+          </div>
+
+          <div className="max-w-sm space-y-1">
+            <label className="text-sm font-medium text-slate-700">bonusesUsed</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={bonusesUsed}
+              onChange={(event) => setBonusesUsed(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+            />
+          </div>
+
           <div>
             <button
               type="submit"
@@ -349,6 +486,15 @@ export default function SimulatorPage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Detected Fraud Signals
+          </p>
+          <div className="mt-2">
+            <ResultItem label="Signals" value={result.detectedFraudSignals} />
+          </div>
         </div>
 
         <div className="mt-4">
