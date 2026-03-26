@@ -3,8 +3,9 @@
 import { FormEvent, useState } from "react";
 import { VerificationType } from "@/app/components/kyc-cases-context";
 import {
-  ConditionType,
   EventType,
+  RuleField,
+  RuleOperator,
   RestrictionType,
   useRules,
 } from "@/app/components/rules-context";
@@ -30,18 +31,7 @@ const stateOptions = [
   "London",
   "Maharashtra",
 ];
-const depositConditionOptions: Extract<
-  ConditionType,
-  "Single deposit" | "Number of deposits" | "Lifetime deposit"
->[] = ["Single deposit", "Number of deposits", "Lifetime deposit"];
-const withdrawalConditionOptions: Extract<
-  ConditionType,
-  "Single withdrawal" | "Number of withdrawals" | "Lifetime withdrawal"
->[] = ["Single withdrawal", "Number of withdrawals", "Lifetime withdrawal"];
-const betPlacementConditionOptions: Extract<
-  ConditionType,
-  "Bet amount >" | "Odds >"
->[] = ["Bet amount >", "Odds >"];
+const operatorOptions: RuleOperator[] = [">", ">=", "<", "<=", "=="];
 const flagOptions = [
   "High Bet Amount",
   "Live Bet Risk",
@@ -49,12 +39,12 @@ const flagOptions = [
   "Bet Velocity",
 ];
 
-function getDefaultConditionType(eventType: EventType): ConditionType {
-  if (eventType === "Deposit") return "Single deposit";
-  if (eventType === "Withdrawal") return "Single withdrawal";
-  if (eventType === "Bonus") return "Number of bonuses used";
-  if (eventType === "Bet Placement") return "Bet amount >";
-  return "Country/State";
+function getDefaultField(eventType: EventType): RuleField {
+  if (eventType === "Deposit") return "depositAmount";
+  if (eventType === "Withdrawal") return "withdrawalAmount";
+  if (eventType === "Bonus") return "bonusesUsed";
+  if (eventType === "Bet Placement") return "betAmount";
+  return "countryState";
 }
 
 export default function RulesPage() {
@@ -62,10 +52,9 @@ export default function RulesPage() {
   const [eventType, setEventType] = useState<EventType>("Registration");
   const [country, setCountry] = useState(countryOptions[0]);
   const [state, setState] = useState(stateOptions[0]);
-  const [conditionType, setConditionType] = useState<ConditionType>(
-    getDefaultConditionType("Registration")
-  );
-  const [conditionValue, setConditionValue] = useState("");
+  const [field, setField] = useState<RuleField>(getDefaultField("Registration"));
+  const [operator, setOperator] = useState<RuleOperator>("==");
+  const [value, setValue] = useState("");
   const [verificationRequired, setVerificationRequired] = useState<
     VerificationType[]
   >([]);
@@ -99,27 +88,28 @@ export default function RulesPage() {
 
   const onEventTypeChange = (nextEventType: EventType) => {
     setEventType(nextEventType);
-    setConditionType(getDefaultConditionType(nextEventType));
-    setConditionValue("");
+    setField(getDefaultField(nextEventType));
+    setOperator(nextEventType === "Registration" ? "==" : ">");
+    setValue("");
     setIsLiveOnly(false);
   };
 
   const onSaveRule = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const resolvedConditionValue =
-      eventType === "Registration" ? `${country} / ${state}` : conditionValue;
+    const resolvedValue = eventType === "Registration" ? `${country} / ${state}` : value;
 
     addRule({
       eventType,
-      conditionType,
-      conditionValue: resolvedConditionValue || "N/A",
+      field,
+      operator,
+      value: resolvedValue || "N/A",
       isLiveOnly: eventType === "Bet Placement" ? isLiveOnly : undefined,
       verificationRequired,
       restrictions,
       flags,
     });
-    setConditionValue("");
+    setValue("");
     setVerificationRequired([]);
     setRestrictions([]);
     setFlags([]);
@@ -157,145 +147,18 @@ export default function RulesPage() {
               2. Conditions
             </h4>
             {eventType === "Registration" ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Country
-                  </label>
-                  <select
-                    value={country}
-                    onChange={(event) => setCountry(event.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  >
-                    {countryOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    State
-                  </label>
-                  <select
-                    value={state}
-                    onChange={(event) => setState(event.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  >
-                    {stateOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : null}
-
-            {eventType === "Deposit" ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Condition type
-                  </label>
-                  <select
-                    value={conditionType}
-                    onChange={(event) =>
-                      setConditionType(event.target.value as ConditionType)
-                    }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  >
-                    {depositConditionOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Value
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={conditionValue}
-                    onChange={(event) => setConditionValue(event.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {eventType === "Withdrawal" ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Condition type
-                  </label>
-                  <select
-                    value={conditionType}
-                    onChange={(event) =>
-                      setConditionType(event.target.value as ConditionType)
-                    }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  >
-                    {withdrawalConditionOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">
-                    Value
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={conditionValue}
-                    onChange={(event) => setConditionValue(event.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {eventType === "Bonus" ? (
-              <div className="max-w-sm space-y-1">
-                <label className="text-sm font-medium text-slate-700">
-                  Number of bonuses used
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={conditionValue}
-                  onChange={(event) => setConditionValue(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                />
-              </div>
-            ) : null}
-
-            {eventType === "Bet Placement" ? (
               <div className="space-y-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">
-                      Condition type
+                      Country
                     </label>
                     <select
-                      value={conditionType}
-                      onChange={(event) =>
-                        setConditionType(event.target.value as ConditionType)
-                      }
+                      value={country}
+                      onChange={(event) => setCountry(event.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
                     >
-                      {betPlacementConditionOptions.map((option) => (
+                      {countryOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -304,28 +167,97 @@ export default function RulesPage() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">
-                      Value
+                      State
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={conditionValue}
-                      onChange={(event) => setConditionValue(event.target.value)}
+                    <select
+                      value={state}
+                      onChange={(event) => setState(event.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                    />
+                    >
+                      {stateOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={isLiveOnly}
-                    onChange={(event) => setIsLiveOnly(event.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                  />
-                  isLive only
-                </label>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <ReadOnlyField label="Field" value="countryState" />
+                  <ReadOnlyField label="Operator" value="==" />
+                  <ReadOnlyField label="Value" value={`${country} / ${state}`} />
+                </div>
               </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Field
+                  </label>
+                  <select
+                    value={field}
+                    onChange={(event) => setField(event.target.value as RuleField)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {eventType === "Deposit" ? (
+                      <option value="depositAmount">depositAmount</option>
+                    ) : null}
+                    {eventType === "Withdrawal" ? (
+                      <option value="withdrawalAmount">withdrawalAmount</option>
+                    ) : null}
+                    {eventType === "Bonus" ? (
+                      <option value="bonusesUsed">bonusesUsed</option>
+                    ) : null}
+                    {eventType === "Bet Placement" ? (
+                      <>
+                        <option value="betAmount">betAmount</option>
+                        <option value="odds">odds</option>
+                      </>
+                    ) : null}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Operator
+                  </label>
+                  <select
+                    value={operator}
+                    onChange={(event) => setOperator(event.target.value as RuleOperator)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  >
+                    {operatorOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Value
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={value}
+                    onChange={(event) => setValue(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                  />
+                </div>
+              </div>
+            )}
+
+            {eventType === "Bet Placement" ? (
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={isLiveOnly}
+                  onChange={(event) => setIsLiveOnly(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                />
+                isLive only
+              </label>
             ) : null}
           </section>
 
@@ -353,28 +285,6 @@ export default function RulesPage() {
 
           <section className="space-y-2">
             <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-              5. Flags
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {flagOptions.map((option) => (
-                <label
-                  key={option}
-                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-                >
-                  <input
-                    type="checkbox"
-                    checked={flags.includes(option)}
-                    onChange={() => toggleFlag(option)}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                  />
-                  {option}
-                </label>
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
               4. Restrictions
             </h4>
             <div className="flex flex-wrap gap-2">
@@ -387,6 +297,28 @@ export default function RulesPage() {
                     type="checkbox"
                     checked={restrictions.includes(option)}
                     onChange={() => toggleRestriction(option)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  {option}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              5. Flags
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {flagOptions.map((option) => (
+                <label
+                  key={option}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={flags.includes(option)}
+                    onChange={() => toggleFlag(option)}
                     className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                   />
                   {option}
@@ -424,7 +356,7 @@ export default function RulesPage() {
                   Event: {rule.eventType}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Condition: {rule.conditionType} = {rule.conditionValue}
+                  Condition: {rule.field} {rule.operator} {rule.value}
                   {rule.isLiveOnly ? " (Live Only)" : ""}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
@@ -447,6 +379,20 @@ export default function RulesPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-medium text-slate-700">{label}</label>
+      <input
+        type="text"
+        value={value}
+        readOnly
+        className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+      />
     </div>
   );
 }

@@ -15,6 +15,14 @@ export type EventType =
   | "Withdrawal"
   | "Bonus"
   | "Bet Placement";
+export type RuleField =
+  | "countryState"
+  | "depositAmount"
+  | "withdrawalAmount"
+  | "bonusesUsed"
+  | "betAmount"
+  | "odds";
+export type RuleOperator = ">" | ">=" | "<" | "<=" | "==";
 export type ConditionType =
   | "Country/State"
   | "Single deposit"
@@ -30,8 +38,12 @@ export type ConditionType =
 export type Rule = {
   id: string;
   eventType: EventType;
-  conditionType: ConditionType;
-  conditionValue: string;
+  field: RuleField;
+  operator: RuleOperator;
+  value: string;
+  // Backward compatibility for legacy rules kept in memory/local storage.
+  conditionType?: ConditionType;
+  conditionValue?: string;
   isLiveOnly?: boolean;
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];

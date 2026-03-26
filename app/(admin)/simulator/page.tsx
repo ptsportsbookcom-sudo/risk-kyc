@@ -58,31 +58,52 @@ export default function SimulatorPage() {
       return false;
     }
 
-    if (rule.conditionType === "Country/State") {
-      return rule.conditionValue === `${country} / ${state}`;
+    const legacyFieldMap: Record<string, { field: string; operator: string }> = {
+      "Country/State": { field: "countryState", operator: "==" },
+      "Single deposit": { field: "depositAmount", operator: ">" },
+      "Number of deposits": { field: "count", operator: ">" },
+      "Lifetime deposit": { field: "count", operator: ">" },
+      "Single withdrawal": { field: "withdrawalAmount", operator: ">" },
+      "Number of withdrawals": { field: "count", operator: ">" },
+      "Lifetime withdrawal": { field: "count", operator: ">" },
+      "Number of bonuses used": { field: "count", operator: ">" },
+      "Bet amount >": { field: "betAmount", operator: ">" },
+      "Odds >": { field: "odds", operator: ">" },
+    };
+
+    const effectiveField =
+      rule.field ?? legacyFieldMap[rule.conditionType ?? ""]?.field ?? "count";
+    const effectiveOperator =
+      rule.operator ?? legacyFieldMap[rule.conditionType ?? ""]?.operator ?? ">";
+    const effectiveValue = rule.value ?? rule.conditionValue ?? "0";
+
+    if (effectiveField === "countryState") {
+      return evaluateOperator(
+        `${country} / ${state}`,
+        effectiveOperator,
+        effectiveValue
+      );
     }
 
-    const numericValue = Number(rule.conditionValue);
+    const numericValue = Number(effectiveValue);
     if (Number.isNaN(numericValue)) {
       return false;
     }
 
-    if (
-      rule.conditionType === "Single deposit" ||
-      rule.conditionType === "Single withdrawal"
-    ) {
-      return simulation.amount >= numericValue;
-    }
+    const numericByField: Record<string, number> = {
+      depositAmount: simulation.amount,
+      withdrawalAmount: simulation.amount,
+      bonusesUsed: simulation.count,
+      betAmount: simulation.betAmount,
+      odds: simulation.odds,
+      count: simulation.count,
+    };
 
-    if (rule.conditionType === "Bet amount >") {
-      return simulation.betAmount >= numericValue;
-    }
-
-    if (rule.conditionType === "Odds >") {
-      return simulation.odds >= numericValue;
-    }
-
-    return simulation.count >= numericValue;
+    return evaluateOperator(
+      numericByField[effectiveField] ?? simulation.count,
+      effectiveOperator,
+      numericValue
+    );
   };
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
@@ -339,6 +360,24 @@ export default function SimulatorPage() {
       </section>
     </div>
   );
+}
+
+function evaluateOperator(
+  left: number | string,
+  operator: string,
+  right: number | string
+) {
+  if (operator === "==") {
+    return left === right;
+  }
+  if (typeof left !== "number" || typeof right !== "number") {
+    return false;
+  }
+  if (operator === ">") return left > right;
+  if (operator === ">=") return left >= right;
+  if (operator === "<") return left < right;
+  if (operator === "<=") return left <= right;
+  return false;
 }
 
 function ResultItem({ label, value }: { label: string; value: string }) {
