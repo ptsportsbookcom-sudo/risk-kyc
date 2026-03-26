@@ -48,6 +48,18 @@ function getDefaultField(eventType: EventType): RuleField {
   return "country";
 }
 
+function getEventConditionFields(eventType: EventType): RuleField[] {
+  if (eventType === "Registration") return ["country", "state"];
+  if (eventType === "Deposit") return ["depositAmount"];
+  if (eventType === "Withdrawal") return ["withdrawalAmount"];
+  if (eventType === "Bonus") return ["bonusesUsed"];
+  return ["betAmount", "odds"]; // Bet Placement
+}
+
+function getFieldLabel(field: RuleField) {
+  return field;
+}
+
 export default function RulesPage() {
   const { rules, addRule } = useRules();
   const [eventType, setEventType] = useState<EventType>("Registration");
@@ -172,12 +184,18 @@ export default function RulesPage() {
     setConditionGroups((current) =>
       current.map((group, gIndex) => {
         if (gIndex !== groupIndex) return group;
+        const usedFields = new Set(group.conditions.map((c) => c.field));
+        const remainingFields = getEventConditionFields(eventType).filter(
+          (fieldOption) => !usedFields.has(fieldOption)
+        );
+        if (remainingFields.length === 0) return group;
+        const nextField = remainingFields[0];
         return {
           ...group,
           conditions: [
             ...group.conditions,
             {
-              field: getDefaultField(eventType),
+              field: nextField,
               operator: eventType === "Registration" ? "==" : ">",
               value: "",
             },
@@ -271,6 +289,77 @@ export default function RulesPage() {
     setFlags([]);
     onEventTypeChange("Registration");
   };
+
+  const registrationConditions: Array<{
+    field: RuleField;
+    operator: RuleOperator;
+    value: string;
+  }> = [
+    { field: "country", operator: "==" as RuleOperator, value: country },
+    { field: "state", operator: "==" as RuleOperator, value: state },
+  ];
+
+  const simplePreviewConditions =
+    eventType === "Registration"
+      ? registrationConditions
+      : conditions.filter((item) => item.value.trim() !== "");
+
+  const advancedPreviewGroups =
+    eventType === "Registration"
+      ? [{ conditions: registrationConditions }]
+      : conditionGroups
+          .map((group) => ({
+            conditions: group.conditions.filter((c) => c.value.trim() !== ""),
+          }))
+          .filter((group) => group.conditions.length > 0);
+
+  const simpleHasConditions = simplePreviewConditions.length > 0;
+  const advancedHasConditions = advancedPreviewGroups.length > 0;
+  const hasAnyConditions =
+    ruleMode === "Advanced" ? advancedHasConditions : simpleHasConditions;
+
+  const formatCondition = (condition: {
+    field: RuleField;
+    operator: RuleOperator;
+    value: string;
+  }) => `${getFieldLabel(condition.field)} ${condition.operator} ${condition.value}`;
+
+  const ifExpression =
+    !hasAnyConditions
+      ? ""
+      : ruleMode === "Advanced"
+        ? (() => {
+            const groupExpressions = advancedPreviewGroups.map((group) => {
+              const joined = group.conditions.map(formatCondition).join(" AND ");
+              return `(${joined})`;
+            });
+            const betweenOperator = betweenGroupsLogic === "ANY" ? "OR" : "AND";
+            return groupExpressions.length === 1
+              ? groupExpressions[0]
+              : groupExpressions.join(` ${betweenOperator} `);
+          })()
+        : (() => {
+            const logic = eventType === "Registration" ? "ALL" : conditionLogic;
+            const betweenOperator = logic === "ANY" ? "OR" : "AND";
+            const joined = simplePreviewConditions.map(formatCondition).join(` ${betweenOperator} `);
+            return simplePreviewConditions.length === 1
+              ? `(${joined})`
+              : `(${joined})`;
+          })();
+
+  const thenActions: string[] = [];
+  if (verificationRequired.length > 0) {
+    thenActions.push(`Verify: ${verificationRequired.join(", ")}`);
+  }
+  if (restrictions.length > 0) {
+    thenActions.push(`Restrictions: ${restrictions.join(", ")}`);
+  }
+  if (flags.length > 0) {
+    thenActions.push(`Flags: ${flags.join(", ")}`);
+  }
+  if (thenActions.length === 0) {
+    thenActions.push("No actions configured");
+  }
 
   return (
     <div className="space-y-5">
@@ -383,6 +472,12 @@ export default function RulesPage() {
               <div className="space-y-3">
                 {ruleMode === "Simple" ? (
                   <>
+                    {!hasAnyConditions ? (
+                      <p className="text-sm text-slate-500">
+                        Add conditions to define when this rule should trigger
+                      </p>
+                    ) : null}
+
                     <div className="inline-flex rounded-lg border border-slate-300 p-1">
                       <button
                         type="button"
@@ -487,6 +582,12 @@ export default function RulesPage() {
                   </>
                 ) : (
                   <>
+                    {!hasAnyConditions ? (
+                      <p className="text-sm text-slate-500">
+                        Add conditions to define when this rule should trigger
+                      </p>
+                    ) : null}
+
                     <div className="inline-flex rounded-lg border border-slate-300 p-1">
                       <button
                         type="button"
@@ -515,92 +616,102 @@ export default function RulesPage() {
                     {conditionGroups.map((group, groupIndex) => (
                       <div
                         key={groupIndex}
-                        className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                        className={`space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 ${
+                          groupIndex > 0 ? "mt-4" : ""
+                        }`}
                       >
-                        <p className="text-sm font-semibold text-slate-700">
-                          Group {groupIndex + 1}
-                        </p>
+                        {(() => {
+                          const usedFields = new Set(group.conditions.map((c) => c.field));
+                          const remainingFields = getEventConditionFields(eventType).filter(
+                            (fieldOption) => !usedFields.has(fieldOption)
+                          );
+                          return (
+                            <>
+                              <p className="text-sm font-semibold text-slate-700">
+                                Group {groupIndex + 1} (ALL conditions must match)
+                              </p>
 
-                        {group.conditions.map((condition, index) => (
-                          <div
-                            key={index}
-                            className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]"
-                          >
-                            <select
-                              value={condition.field}
-                              onChange={(event) =>
-                                updateGroupCondition(groupIndex, index, {
-                                  field: event.target.value as RuleField,
-                                })
-                              }
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                            >
-                              {eventType === "Deposit" ? (
-                                <option value="depositAmount">depositAmount</option>
-                              ) : null}
-                              {eventType === "Withdrawal" ? (
-                                <option value="withdrawalAmount">withdrawalAmount</option>
-                              ) : null}
-                              {eventType === "Bonus" ? (
-                                <option value="bonusesUsed">bonusesUsed</option>
-                              ) : null}
-                              {eventType === "Bet Placement" ? (
-                                <>
-                                  <option value="betAmount">betAmount</option>
-                                  <option value="odds">odds</option>
-                                </>
-                              ) : null}
-                            </select>
+                              {group.conditions.map((condition, index) => (
+                                <div
+                                  key={index}
+                                  className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]"
+                                >
+                                  <select
+                                    value={condition.field}
+                                    onChange={(event) =>
+                                      updateGroupCondition(groupIndex, index, {
+                                        field: event.target.value as RuleField,
+                                      })
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                                  >
+                                    {getEventConditionFields(eventType).map((fieldOption) => (
+                                      <option
+                                        key={fieldOption}
+                                        value={fieldOption}
+                                        disabled={
+                                          usedFields.has(fieldOption) &&
+                                          fieldOption !== condition.field
+                                        }
+                                      >
+                                        {getFieldLabel(fieldOption)}
+                                      </option>
+                                    ))}
+                                  </select>
 
-                            <select
-                              value={condition.operator}
-                              onChange={(event) =>
-                                updateGroupCondition(groupIndex, index, {
-                                  operator: event.target.value as RuleOperator,
-                                })
-                              }
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                            >
-                              {operatorOptions.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
+                                  <select
+                                    value={condition.operator}
+                                    onChange={(event) =>
+                                      updateGroupCondition(groupIndex, index, {
+                                        operator: event.target.value as RuleOperator,
+                                      })
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                                  >
+                                    {operatorOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={condition.value}
+                                    onChange={(event) =>
+                                      updateGroupCondition(groupIndex, index, {
+                                        value: event.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      removeConditionFromGroup(groupIndex, index)
+                                    }
+                                    disabled={group.conditions.length === 1}
+                                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               ))}
-                            </select>
 
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={condition.value}
-                              onChange={(event) =>
-                                updateGroupCondition(groupIndex, index, {
-                                  value: event.target.value,
-                                })
-                              }
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                removeConditionFromGroup(groupIndex, index)
-                              }
-                              disabled={group.conditions.length === 1}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-
-                        <button
-                          type="button"
-                          onClick={() => addConditionToGroup(groupIndex)}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-                        >
-                          Add Condition
-                        </button>
+                              <button
+                                type="button"
+                                onClick={() => addConditionToGroup(groupIndex)}
+                                disabled={remainingFields.length === 0}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Add Condition
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
                     ))}
 
@@ -627,6 +738,26 @@ export default function RulesPage() {
                 isLive only
               </label>
             ) : null}
+          </section>
+
+          <section className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              Rule Preview
+            </h4>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-800">
+                IF:
+              </p>
+              <p className="font-mono text-xs text-slate-700">
+                {hasAnyConditions ? ifExpression : "Add conditions to define when this rule should trigger"}
+              </p>
+              <p className="mt-2 text-sm font-medium text-slate-800">
+                THEN:
+              </p>
+              <p className="font-mono text-xs text-slate-700">
+                {thenActions.join(" | ")}
+              </p>
+            </div>
           </section>
 
           <section className="space-y-2">
