@@ -51,7 +51,7 @@ export type KycCase = {
   fraudFlags?: string[];
   riskScore?: number;
   finalDecision?: {
-    verification: string | null;
+    verification: string[];
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];
@@ -78,7 +78,7 @@ type CreateKycCaseInput = {
   fraudFlags?: string[];
   riskScore?: number;
   finalDecision?: {
-    verification: string | null;
+    verification: string[];
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];

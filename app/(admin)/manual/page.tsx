@@ -431,7 +431,11 @@ export default function ManualTriggerPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <PreviewItem
               label="Final Verification"
-              value={manualResult.finalDecision.verification ?? "None"}
+              value={
+                manualResult.finalDecision.verification.length > 0
+                  ? manualResult.finalDecision.verification.join(", ")
+                  : "None"
+              }
             />
             <PreviewItem
               label="Final Restriction"

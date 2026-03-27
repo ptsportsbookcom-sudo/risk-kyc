@@ -44,7 +44,7 @@ export type RulesEngineResult = {
     flags: string[];
   };
   finalDecision: {
-    verification: string | null;
+    verification: string[];
     kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];
@@ -84,15 +84,6 @@ const FRAUD_SIGNAL_ACTIONS: Record<string, { verification?: string; restriction?
   BET_VELOCITY: { verification: "ID" },
   HIGH_DEPOSIT_VELOCITY: { verification: "Selfie" },
 };
-
-function calculateRiskScore(input: {
-  triggeredRules: Array<{ id: string; name: string; priority: number }>;
-  fraudSignals: string[];
-}) {
-  const ruleScore = input.triggeredRules.length * 15;
-  const fraudScore = input.fraudSignals.length * 20;
-  return Math.min(100, ruleScore + fraudScore);
-}
 
 function evaluateOperator(
   left: number | string,
@@ -207,7 +198,7 @@ function getEmptyResult(): RulesEngineResult {
       flags: [],
     },
     finalDecision: {
-      verification: null,
+      verification: [],
       kycLevel: "L0",
       restriction: null,
       flags: [],
@@ -358,7 +349,7 @@ export function resolveDecision(input: {
   return {
     aggregatedActions,
     finalDecision: {
-      verification: finalVerification,
+      verification: aggregatedActions.verifications,
       kycLevel: finalKycLevel,
       restriction: finalRestriction,
       flags: uniqueFlags,
@@ -371,7 +362,7 @@ export function resolveDecision(input: {
 
 export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] }) {
   const normalizedInput = flattenUnifiedInput(input.input);
-  const detectedFraudSignals = getFraudSignals({
+  let detectedFraudSignals = getFraudSignals({
     deviceCount: normalizedInput.deviceCount,
     ipCountry: normalizedInput.ipCountry,
     accountCountry: normalizedInput.accountCountry,
@@ -385,29 +376,34 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
   }).flags;
 
   const evaluated = evaluateRules(input.input, input.rules);
-  const mergedDetectedFraudSignals = Array.from(
+
+  detectedFraudSignals = Array.from(
     new Set([...(detectedFraudSignals || []), ...(evaluated.ruleActions.flags || [])])
   );
-  const riskScore = calculateRiskScore({
-    triggeredRules: evaluated.triggeredRules,
-    fraudSignals: mergedDetectedFraudSignals,
-  });
+
+  const ruleScore = (evaluated.triggeredRules?.length || 0) * 15;
+  const fraudScore = (detectedFraudSignals?.length || 0) * 20;
+  const riskScore = Math.min(100, ruleScore + fraudScore);
+
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
-    fraudFlags: mergedDetectedFraudSignals,
+    fraudFlags: detectedFraudSignals,
     riskScore,
   });
 
+  const { aggregatedActions, finalDecision } = resolved;
+
+  detectedFraudSignals = Array.from(
+    new Set([...(detectedFraudSignals || []), ...(aggregatedActions.flags || [])])
+  );
+
   const result = {
     triggeredRules: evaluated.triggeredRules,
-    flags: resolved.finalDecision.flags,
-    riskScore: resolved.finalDecision.riskScore,
-    finalVerification: resolved.finalDecision.verification,
-    finalRestriction: resolved.finalDecision.restriction,
-    finalKycLevel: resolved.finalDecision.kycLevel,
-    aggregatedActions: resolved.aggregatedActions,
-    finalDecision: resolved.finalDecision,
-    detectedFraudSignals: mergedDetectedFraudSignals,
+    detectedFraudSignals,
+    aggregatedActions,
+    riskScore,
+    flags: aggregatedActions.flags,
+    finalDecision,
   };
 
   console.log("INPUT:", input.input);
@@ -426,7 +422,7 @@ export function runRulesEngine({ input, rules }: RulesEngineInput): RulesEngineR
     verificationRequired: result.aggregatedActions.verifications,
     restrictions: result.aggregatedActions.restrictions,
     flags: result.flags,
-    riskScore: result.finalDecision.riskScore,
+    riskScore: result.riskScore,
     aggregatedActions: result.aggregatedActions,
     finalDecision: result.finalDecision,
     detectedFraudSignals: result.detectedFraudSignals,

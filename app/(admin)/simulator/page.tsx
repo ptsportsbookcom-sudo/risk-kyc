@@ -56,7 +56,7 @@ type BulkSimulationResult = {
   scenario: BulkScenario;
   triggeredRules: Array<{ id: string; name: string; priority: number }>;
   finalDecision: {
-    verification: string | null;
+    verification: string[];
     kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];
@@ -200,7 +200,10 @@ export default function SimulatorPage() {
           engineResult.aggregatedActions.flags.length > 0
             ? engineResult.aggregatedActions.flags.join(", ")
             : "None",
-        finalVerification: "None",
+        finalVerification:
+          engineResult.finalDecision.verification.length > 0
+            ? engineResult.finalDecision.verification.join(", ")
+            : "None",
         finalKycLevel: "L0",
         finalRestriction: "None",
         finalFlags:
@@ -223,9 +226,7 @@ export default function SimulatorPage() {
     const resolvedVerification = engineResult.finalDecision.verification;
     const resolvedKycLevel = engineResult.finalDecision.kycLevel;
     const resolvedRestriction = engineResult.finalDecision.restriction;
-    const finalVerifications: VerificationType[] = resolvedVerification
-      ? [resolvedVerification as VerificationType]
-      : [];
+    const finalVerifications = resolvedVerification as VerificationType[];
     const finalRestrictions: RestrictionType[] = resolvedRestriction
       ? [resolvedRestriction as RestrictionType]
       : [];
@@ -298,7 +299,10 @@ export default function SimulatorPage() {
         engineResult.aggregatedActions.flags.length > 0
           ? engineResult.aggregatedActions.flags.join(", ")
           : "None",
-      finalVerification: engineResult.finalDecision.verification ?? "None",
+      finalVerification:
+        engineResult.finalDecision.verification.length > 0
+          ? engineResult.finalDecision.verification.join(", ")
+          : "None",
       finalKycLevel: engineResult.finalDecision.kycLevel,
       finalRestriction: engineResult.finalDecision.restriction ?? "None",
       finalFlags:
@@ -469,7 +473,7 @@ export default function SimulatorPage() {
           kycLevel: engineResult.finalDecision.kycLevel,
           restriction: engineResult.finalDecision.restriction,
           flags: engineResult.finalDecision.flags,
-          riskScore: engineResult.finalDecision.riskScore ?? 0,
+          riskScore: engineResult.riskScore ?? engineResult.finalDecision.riskScore ?? 0,
         },
         fraudFlags: engineResult.detectedFraudSignals,
       };
@@ -499,9 +503,8 @@ export default function SimulatorPage() {
       const caseId = addCase({
         userId: generatedUserId,
         username: `bulk_player_${resultItem.scenario.id.toLowerCase()}`,
-        verificationRequired: resultItem.finalDecision.verification
-          ? [resultItem.finalDecision.verification as VerificationType]
-          : [],
+        verificationRequired: (resultItem.finalDecision.verification ??
+          []) as VerificationType[],
         kycLevel: resultItem.finalDecision.kycLevel,
         restrictions: resultItem.finalDecision.restriction
           ? [resultItem.finalDecision.restriction as RestrictionType]
@@ -962,7 +965,10 @@ export default function SimulatorPage() {
                     : "None"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Final Verification: {item.finalDecision.verification ?? "None"}
+                  Final Verification:{" "}
+                  {item.finalDecision.verification.length > 0
+                    ? item.finalDecision.verification.join(", ")
+                    : "None"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Final Restriction: {item.finalDecision.restriction ?? "None"}
