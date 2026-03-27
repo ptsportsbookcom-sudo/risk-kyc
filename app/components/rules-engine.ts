@@ -75,6 +75,14 @@ export type EvaluateRulesResult = {
 
 export type UnifiedRiskInput = RulesEngineInput["input"];
 
+const FRAUD_SIGNAL_ACTIONS: Record<string, { verification?: string; restriction?: string }> = {
+  MULTI_ACCOUNT: { verification: "Selfie", restriction: "Withdrawal Block" },
+  COUNTRY_MISMATCH: { verification: "ID" },
+  BONUS_ABUSE: { restriction: "Deposit Block" },
+  BET_VELOCITY: { verification: "ID" },
+  HIGH_DEPOSIT_VELOCITY: { verification: "Selfie" },
+};
+
 function evaluateOperator(
   left: number | string,
   operator: string,
@@ -269,7 +277,20 @@ export function resolveDecision(input: {
     restrictions.push(...(rule.restrictions ?? []));
     flags.push(...(rule.flags ?? []));
   });
-  flags.push(...input.fraudFlags);
+  input.fraudFlags.forEach((flag) => {
+    const action = FRAUD_SIGNAL_ACTIONS[flag];
+    if (!action) return;
+
+    if (action.verification) {
+      verificationLevels.push(action.verification);
+    }
+
+    if (action.restriction) {
+      restrictions.push(action.restriction);
+    }
+
+    flags.push(flag);
+  });
 
   const priorityOrder: Record<string, number> = {
     ID: 1,
@@ -281,7 +302,8 @@ export function resolveDecision(input: {
       (left, right) => (priorityOrder[right] ?? 0) - (priorityOrder[left] ?? 0)
     )[0] ?? null;
   const finalVerification =
-    highestVerification ?? (input.triggeredRules.length > 0 ? "ID" : null);
+    highestVerification ??
+    (input.triggeredRules.length > 0 || input.fraudFlags.length > 0 ? "ID" : null);
   const finalKycLevel: "L0" | "L1" | "L2" | "L3" =
     finalVerification === "Full KYC"
       ? "L3"
