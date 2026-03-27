@@ -501,16 +501,20 @@ export default function SimulatorPage() {
   };
 
   const createCasesFromBulkResults = () => {
-    const eligible = bulkResults.filter((resultItem) => resultItem.triggeredRules.length > 0);
+    const eligible = bulkResults.filter(
+      (resultItem) =>
+        resultItem.triggeredRules.length > 0 || resultItem.finalDecision.flags.length > 0
+    );
     if (eligible.length === 0) {
-      setBulkCaseMessage("No bulk results with triggered rules.");
+      setBulkCaseMessage("No bulk results with triggered rules or flags.");
       return;
     }
 
     let createdCount = 0;
-    eligible.forEach((resultItem) => {
+    eligible.forEach((resultItem, index) => {
+      const generatedUserId = `SIM-${Date.now()}-${index + 1}`;
       const caseId = addCase({
-        userId: resultItem.scenario.id,
+        userId: generatedUserId,
         username: `bulk_player_${resultItem.scenario.id.toLowerCase()}`,
         verificationRequired: resultItem.finalDecision.verification
           ? [resultItem.finalDecision.verification as VerificationType]
@@ -522,13 +526,15 @@ export default function SimulatorPage() {
         flags: resultItem.finalDecision.flags,
         triggeredRules: resultItem.triggeredRules,
         fraudFlags: resultItem.fraudFlags,
+        finalDecision: resultItem.finalDecision,
         source: "simulation",
+        status: "Pending",
       });
 
       resultItem.triggeredRules.forEach((rule) => {
         addAuditLog({
           caseId,
-          userId: resultItem.scenario.id,
+          userId: generatedUserId,
           type: "rule_triggered",
           description: `Rule triggered: ${rule.name}`,
           metadata: { ruleId: rule.id, priority: rule.priority, source: "bulk_simulation" },
@@ -537,7 +543,7 @@ export default function SimulatorPage() {
       createdCount += 1;
     });
 
-    setBulkCaseMessage(`${createdCount} case(s) created from bulk results.`);
+    setBulkCaseMessage(`✔ ${createdCount} cases created from simulation`);
   };
 
   const resetSimulationsOnly = () => {
