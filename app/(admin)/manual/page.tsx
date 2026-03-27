@@ -44,33 +44,53 @@ export default function ManualTriggerPage() {
   >([]);
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
   const [flags, setFlags] = useState<string[]>([]);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [deviceCount, setDeviceCount] = useState("1");
+  const [ipCountry, setIpCountry] = useState("US");
+  const [accountCountry, setAccountCountry] = useState("US");
+  const [betCountLastMinute, setBetCountLastMinute] = useState("0");
+  const [bonusesUsed, setBonusesUsed] = useState("0");
+  const [betAmount, setBetAmount] = useState("0");
+  const [odds, setOdds] = useState("1");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const buildUnifiedInput = () => ({
-    Transaction: {
-      depositAmount: 0,
-      withdrawalAmount: 0,
-      totalDeposits: 0,
-      depositCount: 0,
-      withdrawalCount: 0,
-    },
-    Player: {
-      deviceCount: 1,
-      ipCountry: "US",
-      accountCountry: "US",
-      country: "US",
-      kycLevel: "L0",
-    },
-    Behavior: {
-      bonusesUsed: 0,
-      betCountLastMinute: 0,
-      lastDepositTimestamp: 0,
-      lastBetTimestamp: 0,
-      betAmount: 0,
-      odds: 1,
-      flags: actionType === "Flag" ? flags : [],
-    },
-  });
+  const buildUnifiedInput = (timestamp?: number) => {
+    const now = timestamp ?? 0;
+    const normalizedDepositAmount = Number(depositAmount || 0);
+    const normalizedWithdrawalAmount = Number(withdrawalAmount || 0);
+    const normalizedDeviceCount = Number(deviceCount || 1);
+    const normalizedBetCountLastMinute = Number(betCountLastMinute || 0);
+    const normalizedBonusesUsed = Number(bonusesUsed || 0);
+    const normalizedBetAmount = Number(betAmount || 0);
+    const normalizedOdds = Number(odds || 1);
+
+    return {
+      Transaction: {
+        depositAmount: normalizedDepositAmount,
+        withdrawalAmount: normalizedWithdrawalAmount,
+        totalDeposits: normalizedDepositAmount,
+        depositCount: normalizedDepositAmount > 0 ? 1 : 0,
+        withdrawalCount: normalizedWithdrawalAmount > 0 ? 1 : 0,
+      },
+      Player: {
+        deviceCount: normalizedDeviceCount,
+        ipCountry: ipCountry.trim() || "US",
+        accountCountry: accountCountry.trim() || "US",
+        country: accountCountry.trim() || "US",
+        kycLevel: "L0",
+      },
+      Behavior: {
+        bonusesUsed: normalizedBonusesUsed,
+        betCountLastMinute: normalizedBetCountLastMinute,
+        lastDepositTimestamp: now,
+        lastBetTimestamp: now,
+        betAmount: normalizedBetAmount,
+        odds: normalizedOdds,
+        flags: actionType === "Flag" ? flags : [],
+      },
+    };
+  };
   const manualInput = buildUnifiedInput();
   const manualResult = runRiskEngine({
     input: manualInput,
@@ -110,7 +130,7 @@ export default function ManualTriggerPage() {
 
     const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
-    const unifiedInput = buildUnifiedInput();
+    const unifiedInput = buildUnifiedInput(Date.now());
     const result = runRiskEngine({
       input: unifiedInput,
       rules,
@@ -171,6 +191,15 @@ export default function ManualTriggerPage() {
     setVerificationRequired([]);
     setRestrictions([]);
     setFlags([]);
+    setDepositAmount("");
+    setWithdrawalAmount("");
+    setDeviceCount("1");
+    setIpCountry("US");
+    setAccountCountry("US");
+    setBetCountLastMinute("0");
+    setBonusesUsed("0");
+    setBetAmount("0");
+    setOdds("1");
   };
 
   return (
@@ -229,6 +258,109 @@ export default function ManualTriggerPage() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
           />
         </div>
+
+        <section className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+            Risk Input Data
+          </h4>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">depositAmount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={depositAmount}
+                onChange={(event) => setDepositAmount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">withdrawalAmount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={withdrawalAmount}
+                onChange={(event) => setWithdrawalAmount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">deviceCount</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={deviceCount}
+                onChange={(event) => setDeviceCount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">ipCountry</label>
+              <input
+                type="text"
+                value={ipCountry}
+                onChange={(event) => setIpCountry(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">accountCountry</label>
+              <input
+                type="text"
+                value={accountCountry}
+                onChange={(event) => setAccountCountry(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">betCountLastMinute</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={betCountLastMinute}
+                onChange={(event) => setBetCountLastMinute(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">bonusesUsed</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={bonusesUsed}
+                onChange={(event) => setBonusesUsed(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">betAmount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={betAmount}
+                onChange={(event) => setBetAmount(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">odds</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={odds}
+                onChange={(event) => setOdds(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+          </div>
+        </section>
 
         <div className="space-y-1">
           <label htmlFor="actionType" className="text-sm font-medium text-slate-700">
@@ -295,6 +427,14 @@ export default function ManualTriggerPage() {
                 manualResult.finalDecision.flags.length > 0
                   ? manualResult.finalDecision.flags.join(", ")
                   : "None"
+              }
+            />
+            <PreviewItem
+              label="Risk Score"
+              value={
+                manualResult.riskScore === undefined
+                  ? "-"
+                  : String(manualResult.riskScore)
               }
             />
           </div>
