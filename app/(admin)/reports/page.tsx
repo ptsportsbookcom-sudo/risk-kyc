@@ -56,7 +56,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">KYC Metrics</h3>
         <p className="mt-1 text-sm text-slate-600">
           KYC distribution and verification workload from current state.
@@ -74,7 +74,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Case Metrics</h3>
         <p className="mt-1 text-sm text-slate-600">Current case workload and resolution status.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -85,7 +85,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Fraud Metrics</h3>
         <p className="mt-1 text-sm text-slate-600">
           Frequency of key fraud indicators across all cases.

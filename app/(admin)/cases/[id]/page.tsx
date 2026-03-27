@@ -70,8 +70,8 @@ export default function CaseManagementDetailPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Case Management</h3>
             <div className="mt-2">
@@ -86,7 +86,7 @@ export default function CaseManagementDetailPage() {
           </div>
           <Link
             href="/review"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto"
           >
             Back to Review
           </Link>
@@ -102,12 +102,12 @@ export default function CaseManagementDetailPage() {
           />
           <InfoItem label="Source" value={toSourceLabel(selectedCase.source)} />
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             disabled={isResolved}
             onClick={() => updateCaseStatus(selectedCase.id, "Approved")}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 w-full rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             Approve
           </button>
@@ -115,14 +115,14 @@ export default function CaseManagementDetailPage() {
             type="button"
             disabled={isResolved}
             onClick={() => updateCaseStatus(selectedCase.id, "Rejected")}
-            className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 w-full rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             Reject
           </button>
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
           Decision
         </h4>
@@ -143,7 +143,7 @@ export default function CaseManagementDetailPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
           Why this case exists
         </h4>
@@ -176,11 +176,11 @@ export default function CaseManagementDetailPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
           Notes
         </h4>
-        <form className="mt-3 flex gap-2" onSubmit={handleSaveNote}>
+        <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={handleSaveNote}>
           <input
             type="text"
             value={noteText}
@@ -190,7 +190,7 @@ export default function CaseManagementDetailPage() {
           />
           <button
             type="submit"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+            className="min-h-11 w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 sm:w-auto"
           >
             Save
           </button>
@@ -214,11 +214,11 @@ export default function CaseManagementDetailPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
           Timeline
         </h4>
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1">
           {timelineItems.length > 0 ? (
             timelineItems.map((item) => (
               <article

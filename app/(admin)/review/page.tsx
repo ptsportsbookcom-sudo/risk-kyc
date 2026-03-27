@@ -60,7 +60,7 @@ export default function ReviewPage() {
   }, [cases, statusFilter, verificationFilter, usernameQuery]);
 
   return (
-    <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
       <div>
         <h3 className="text-lg font-semibold text-slate-900">KYC Review</h3>
         <p className="mt-1 text-sm text-slate-600">
@@ -133,7 +133,7 @@ export default function ReviewPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200">
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto sm:block">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -244,7 +244,7 @@ export default function ReviewPage() {
                           event.stopPropagation();
                           updateCaseStatus(row.id, "Approved");
                         }}
-                        className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                        className="min-h-11 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
                         aria-label={`Approve ${row.username}`}
                       >
                         Approve
@@ -255,7 +255,7 @@ export default function ReviewPage() {
                           event.stopPropagation();
                           updateCaseStatus(row.id, "Rejected");
                         }}
-                        className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
+                        className="min-h-11 rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
                         aria-label={`Reject ${row.username}`}
                       >
                         Reject
@@ -267,6 +267,27 @@ export default function ReviewPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        <div className="space-y-3 p-3 sm:hidden">
+          {filteredRows.map((row) => {
+            const player = getPlayerById(row.userId);
+            const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? "None";
+            const flags = row.flags && row.flags.length > 0 ? row.flags.join(", ") : "None";
+            return (
+              <article
+                key={row.id}
+                className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                onClick={() => router.push(`/cases/${row.id}`)}
+              >
+                <p className="text-sm font-semibold text-slate-900">{row.userId}</p>
+                <p className="text-sm text-slate-700">Status: {row.status}</p>
+                <p className="text-sm text-slate-700">KYC Level: {row.kycLevel}</p>
+                <p className="text-sm text-slate-700">Flags: {flags}</p>
+                <p className="text-sm text-slate-700">Restriction: {resolvedRestriction}</p>
+              </article>
+            );
+          })}
         </div>
 
         {cases.length === 0 ? (

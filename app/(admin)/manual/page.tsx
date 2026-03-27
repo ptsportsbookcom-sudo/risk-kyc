@@ -148,7 +148,7 @@ export default function ManualTriggerPage() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
       <h3 className="text-lg font-semibold text-slate-900">Manual KYC Trigger</h3>
       <p className="mt-1 text-sm text-slate-600">
         Manually create a pending KYC case with required verification and
@@ -232,9 +232,9 @@ export default function ManualTriggerPage() {
                 {verificationOptions
                   .filter((item) => item !== "Proof")
                   .map((option) => (
-                    <label
+                <label
                       key={option}
-                      className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
                     >
                       <input
                         type="checkbox"
@@ -284,7 +284,7 @@ export default function ManualTriggerPage() {
                 {restrictionOptions.map((option) => (
                   <label
                     key={option}
-                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
                   >
                     <input
                       type="checkbox"
@@ -307,7 +307,7 @@ export default function ManualTriggerPage() {
                 {flagOptions.map((option) => (
                   <label
                     key={option}
-                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
                   >
                     <input
                       type="checkbox"
@@ -323,10 +323,10 @@ export default function ManualTriggerPage() {
           ) : null}
         </section>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <button
             type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+            className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 sm:w-auto"
           >
             Apply Trigger
           </button>

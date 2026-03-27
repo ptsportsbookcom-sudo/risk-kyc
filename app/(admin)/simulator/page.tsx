@@ -357,7 +357,7 @@ export default function SimulatorPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Risk Simulator</h3>
         <p className="mt-1 text-sm text-slate-600">
           Simulate user events and evaluate KYC and restriction outcomes.
@@ -596,7 +596,7 @@ export default function SimulatorPage() {
           <div>
             <button
               type="submit"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+              className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 sm:w-auto"
             >
               Run Simulation
             </button>
@@ -604,7 +604,7 @@ export default function SimulatorPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-base font-semibold text-slate-900">Self-Exclusion</h4>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
@@ -634,17 +634,17 @@ export default function SimulatorPage() {
           </div>
         </div>
         <div className="mt-4">
-          <button
+            <button
             type="button"
             onClick={applySelfExclusionAction}
-            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
+              className="min-h-11 w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 sm:w-auto"
           >
             Apply Self-Exclusion
           </button>
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h4 className="text-base font-semibold text-slate-900">Simulation Results</h4>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <ResultItem label="Triggered action" value={result.triggeredAction} />
@@ -666,25 +666,25 @@ export default function SimulatorPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Enforcement Test
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => tryAction("deposit")}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+              className="min-h-11 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 sm:w-auto"
             >
               Try Deposit
             </button>
             <button
               type="button"
               onClick={() => tryAction("withdrawal")}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+              className="min-h-11 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 sm:w-auto"
             >
               Try Withdrawal
             </button>
             <button
               type="button"
               onClick={() => tryAction("casino")}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+              className="min-h-11 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 sm:w-auto"
             >
               Try Casino
             </button>
