@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
 
@@ -8,21 +8,38 @@ export default function DashboardPage() {
   const { players } = usePlayers();
   const { cases } = useKycCases();
 
-  const dashboardStats = useMemo(() => {
+  const metrics = useMemo(() => {
     const totalUsers = players.length;
-    const kycPending = cases.filter((item) => item.status.toLowerCase() === "pending").length;
+    const validUserIds = new Set(players.map((player) => player.id));
+    const linkedCases = cases.filter((item) => validUserIds.has(item.userId));
+    const pendingCases = linkedCases.filter(
+      (item) => item.status.toLowerCase() === "pending"
+    );
     const blockedUsers = players.filter(
       (player) => player.restriction !== null || player.isSelfExcluded
     ).length;
     const activeSessions = totalUsers;
 
-    return [
-      { label: "Total Users", value: totalUsers.toLocaleString() },
-      { label: "KYC Pending", value: kycPending.toLocaleString() },
-      { label: "Blocked Users", value: blockedUsers.toLocaleString() },
-      { label: "Active Sessions", value: activeSessions.toLocaleString() },
-    ];
+    return {
+      totalUsers,
+      pendingCasesCount: pendingCases.length,
+      blockedUsers,
+      activeSessions,
+    };
   }, [players, cases]);
+
+  useEffect(() => {
+    console.log("players:", metrics.totalUsers);
+    console.log("cases:", cases.length);
+    console.log("pending:", metrics.pendingCasesCount);
+  }, [metrics.totalUsers, metrics.pendingCasesCount, cases.length]);
+
+  const dashboardStats = [
+    { label: "Total Users", value: metrics.totalUsers.toLocaleString() },
+    { label: "KYC Pending", value: metrics.pendingCasesCount.toLocaleString() },
+    { label: "Blocked Users", value: metrics.blockedUsers.toLocaleString() },
+    { label: "Active Sessions", value: metrics.activeSessions.toLocaleString() },
+  ];
 
   const showEmptyState = players.length === 0 && cases.length === 0;
 
