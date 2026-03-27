@@ -72,6 +72,7 @@ export type ConditionType =
 export type Rule = {
   id: string;
   name: string;
+  source?: "manual" | "auto";
   eventType: EventType;
   // Simple mode: flat list of conditions combined by conditionLogic.
   conditions?: RuleCondition[];
@@ -125,6 +126,7 @@ export function RulesProvider({ children }: { children: ReactNode }) {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ...input,
         name: input.name?.trim() || "Untitled Rule",
+        source: input.source ?? "manual",
         priority: input.priority ?? 100,
         enabled: input.enabled ?? true,
         stopProcessing: input.stopProcessing ?? false,

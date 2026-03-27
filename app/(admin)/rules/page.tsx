@@ -2,8 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { VerificationType } from "@/app/components/kyc-cases-context";
+import { runRulesEngine } from "@/app/components/rules-engine";
 import {
   EventType,
+  Rule,
   RuleConditionCategory,
   RuleField,
   RuleLogic,
@@ -122,6 +124,137 @@ function formatRestrictionLabel(option: string) {
   return `apply ${option}`;
 }
 
+type BulkScenario = {
+  player: {
+    deposit: number;
+    deviceCount: number;
+    ipCountry: string;
+    accountCountry: string;
+  };
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  finalDecision: {
+    verification: string | null;
+    kycLevel: "L0" | "L1" | "L2" | "L3";
+    restriction: string | null;
+    flags: string[];
+  };
+};
+
+function getAutoRules(): Omit<Rule, "id">[] {
+  return [
+    {
+      name: "AUTO: Deposit > 100 -> ID",
+      source: "auto",
+      eventType: "Deposit",
+      conditions: [
+        { category: "Transaction", field: "depositAmount", operator: ">", value: "100" },
+      ],
+      conditionLogic: "ALL",
+      conditionGroups: [],
+      groupLogic: "ALL",
+      field: "depositAmount",
+      operator: ">",
+      value: "100",
+      actions: { verifications: ["ID"], restrictions: [], flags: [] },
+      priority: 10,
+      enabled: true,
+      stopProcessing: false,
+      verificationRequired: ["ID"],
+      restrictions: [],
+      flags: [],
+    },
+    {
+      name: "AUTO: Deposit > 500 -> Selfie",
+      source: "auto",
+      eventType: "Deposit",
+      conditions: [
+        { category: "Transaction", field: "depositAmount", operator: ">", value: "500" },
+      ],
+      conditionLogic: "ALL",
+      conditionGroups: [],
+      groupLogic: "ALL",
+      field: "depositAmount",
+      operator: ">",
+      value: "500",
+      actions: { verifications: ["Selfie"], restrictions: [], flags: [] },
+      priority: 20,
+      enabled: true,
+      stopProcessing: false,
+      verificationRequired: ["Selfie"],
+      restrictions: [],
+      flags: [],
+    },
+    {
+      name: "AUTO: Deposit > 1000 -> Full KYC",
+      source: "auto",
+      eventType: "Deposit",
+      conditions: [
+        { category: "Transaction", field: "depositAmount", operator: ">", value: "1000" },
+      ],
+      conditionLogic: "ALL",
+      conditionGroups: [],
+      groupLogic: "ALL",
+      field: "depositAmount",
+      operator: ">",
+      value: "1000",
+      actions: { verifications: ["Full KYC"], restrictions: [], flags: [] },
+      priority: 30,
+      enabled: true,
+      stopProcessing: false,
+      verificationRequired: ["Full KYC"],
+      restrictions: [],
+      flags: [],
+    },
+    {
+      name: "AUTO: Device Count > 3 -> MULTI_ACCOUNT",
+      source: "auto",
+      eventType: "ANY",
+      conditions: [
+        { category: "Player", field: "deviceCount", operator: ">", value: "3" },
+      ],
+      conditionLogic: "ALL",
+      conditionGroups: [],
+      groupLogic: "ALL",
+      field: "deviceCount",
+      operator: ">",
+      value: "3",
+      actions: { verifications: [], restrictions: [], flags: ["MULTI_ACCOUNT"] },
+      priority: 40,
+      enabled: true,
+      stopProcessing: false,
+      verificationRequired: [],
+      restrictions: [],
+      flags: ["MULTI_ACCOUNT"],
+    },
+    {
+      name: "AUTO: IP Country != Account Country -> COUNTRY_MISMATCH",
+      source: "auto",
+      eventType: "ANY",
+      conditions: [
+        {
+          category: "Risk",
+          field: "flags",
+          operator: "==",
+          value: "COUNTRY_MISMATCH",
+        },
+      ],
+      conditionLogic: "ALL",
+      conditionGroups: [],
+      groupLogic: "ALL",
+      field: "flags",
+      operator: "==",
+      value: "COUNTRY_MISMATCH",
+      actions: { verifications: [], restrictions: [], flags: ["COUNTRY_MISMATCH"] },
+      priority: 50,
+      enabled: true,
+      stopProcessing: false,
+      verificationRequired: [],
+      restrictions: [],
+      flags: ["COUNTRY_MISMATCH"],
+    },
+  ];
+}
+
 export default function RulesPage() {
   const { rules, addRule } = useRules();
   const [ruleName, setRuleName] = useState("");
@@ -152,6 +285,7 @@ export default function RulesPage() {
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
   const [flags, setFlags] = useState<string[]>([]);
   const [isLiveOnly, setIsLiveOnly] = useState(false);
+  const [bulkSimulations, setBulkSimulations] = useState<BulkScenario[]>([]);
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
@@ -296,6 +430,62 @@ export default function RulesPage() {
     onEventTypeChange("Registration");
   };
 
+  const handleGenerateTestRules = () => {
+    const existingAutoNames = new Set(
+      rules.filter((rule) => rule.source === "auto").map((rule) => rule.name)
+    );
+    const autoRules = getAutoRules().filter((rule) => !existingAutoNames.has(rule.name));
+    autoRules.forEach((rule) => addRule(rule));
+  };
+
+  const handleRunBulkSimulation = () => {
+    const scenarios = [
+      { deposit: 50, deviceCount: 1, ipCountry: "United States", accountCountry: "United States" },
+      { deposit: 300, deviceCount: 2, ipCountry: "United States", accountCountry: "United States" },
+      { deposit: 1000, deviceCount: 4, ipCountry: "United States", accountCountry: "United States" },
+      { deposit: 2000, deviceCount: 2, ipCountry: "Germany", accountCountry: "France" },
+    ];
+
+    const results = scenarios.map((scenario) => {
+      const engineResult = runRulesEngine({
+        eventType: "Deposit",
+        playerData: {
+          depositAmount: scenario.deposit,
+          withdrawalAmount: 0,
+          totalDeposits: scenario.deposit,
+          depositCount: 1,
+          withdrawalCount: 0,
+          lastDepositTimestamp: Date.now(),
+          lastBetTimestamp: Date.now(),
+          betCountLastMinute: 0,
+          bonusesUsed: 0,
+          country: scenario.accountCountry,
+          ipCountry: scenario.ipCountry,
+          accountCountry: scenario.accountCountry,
+          deviceCount: scenario.deviceCount,
+          kycLevel: "L0",
+          betAmount: 0,
+          odds: 0,
+          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
+        },
+        rules,
+      });
+
+      return {
+        player: scenario,
+        triggeredRules: engineResult.triggeredRules,
+        finalDecision: {
+          verification: engineResult.finalDecision.verification,
+          kycLevel: engineResult.finalDecision.kycLevel,
+          restriction: engineResult.finalDecision.restriction,
+          flags: engineResult.finalDecision.flags,
+        },
+      };
+    });
+
+    setBulkSimulations(results);
+  };
+
     const previewGroups = conditionGroups
       .map((group) => ({
         conditions: group.conditions.filter((c) => c.value.trim() !== ""),
@@ -348,6 +538,22 @@ export default function RulesPage() {
         <p className="mt-1 text-sm text-slate-600">
           Build KYC trigger rules for event-driven risk controls.
         </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={handleGenerateTestRules}
+            className="min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100 sm:w-auto"
+          >
+            Generate Test Rules
+          </button>
+          <button
+            type="button"
+            onClick={handleRunBulkSimulation}
+            className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 sm:w-auto"
+          >
+            Run Bulk Simulation
+          </button>
+        </div>
 
         <form className="mt-5 space-y-6" onSubmit={onSaveRule}>
           <section className="space-y-2">
@@ -1091,6 +1297,9 @@ export default function RulesPage() {
                   {rule.name} - Event: {rule.eventType}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
+                  Source: {rule.source ?? "manual"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
                   Priority: {rule.priority ?? 100} | Enabled:{" "}
                   {rule.enabled === false ? "No" : "Yes"} | Stop Processing:{" "}
                   {rule.stopProcessing ? "Yes" : "No"}
@@ -1135,6 +1344,47 @@ export default function RulesPage() {
                   Flags:{" "}
                   {(rule.actions?.flags ?? rule.flags).length > 0
                     ? (rule.actions?.flags ?? rule.flags).join(", ")
+                    : "None"}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <h4 className="text-base font-semibold text-slate-900">Bulk Simulation Results</h4>
+        {bulkSimulations.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            No bulk simulation run yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {bulkSimulations.map((result, index) => (
+              <article
+                key={`${result.player.deposit}-${result.player.deviceCount}-${index}`}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+              >
+                <p className="text-sm font-semibold text-slate-900">
+                  Player: deposit={result.player.deposit}, deviceCount={result.player.deviceCount},
+                  ipCountry={result.player.ipCountry}, accountCountry={result.player.accountCountry}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Triggered Rules:{" "}
+                  {result.triggeredRules.length > 0
+                    ? result.triggeredRules.map((rule) => rule.name).join(", ")
+                    : "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Final KYC Level: {result.finalDecision.kycLevel}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Restriction: {result.finalDecision.restriction ?? "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Flags:{" "}
+                  {result.finalDecision.flags.length > 0
+                    ? result.finalDecision.flags.join(", ")
                     : "None"}
                 </p>
               </article>
