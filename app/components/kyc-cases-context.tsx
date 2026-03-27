@@ -52,6 +52,7 @@ export type KycCase = {
   riskScore?: number;
   finalDecision?: {
     verification: string[];
+    primaryVerification?: string | null;
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];
@@ -79,6 +80,7 @@ type CreateKycCaseInput = {
   riskScore?: number;
   finalDecision?: {
     verification: string[];
+    primaryVerification?: string | null;
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];

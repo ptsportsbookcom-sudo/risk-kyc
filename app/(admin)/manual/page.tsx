@@ -432,9 +432,18 @@ export default function ManualTriggerPage() {
             <PreviewItem
               label="Final Verification"
               value={
-                manualResult.finalDecision.verification.length > 0
-                  ? manualResult.finalDecision.verification.join(", ")
-                  : "None"
+                Array.isArray(
+                  manualResult.finalDecision.verification as unknown as
+                    | string[]
+                    | string
+                    | undefined
+                )
+                  ? (
+                      manualResult.finalDecision.verification as string[]
+                    ).join(", ")
+                  : (manualResult.finalDecision.verification as unknown as
+                      | string
+                      | undefined) || "None"
               }
             />
             <PreviewItem

@@ -57,6 +57,7 @@ type BulkSimulationResult = {
   triggeredRules: Array<{ id: string; name: string; priority: number }>;
   finalDecision: {
     verification: string[];
+    primaryVerification?: string | null;
     kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];

@@ -61,10 +61,13 @@ export default function ReviewPage() {
     return cases.filter((row) => {
       const matchesStatus =
         statusFilter === "All" ? true : row.status === statusFilter;
+      const verificationRequired = row.verificationRequired as unknown;
       const matchesVerification =
         verificationFilter === "All"
           ? true
-          : row.verificationRequired.includes(verificationFilter);
+          : Array.isArray(verificationRequired)
+            ? verificationRequired.includes(verificationFilter)
+            : verificationRequired === verificationFilter;
       const matchesUsername = row.username
         .toLowerCase()
         .includes(usernameQuery.toLowerCase().trim());
@@ -228,9 +231,9 @@ export default function ReviewPage() {
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.verificationRequired.length > 0
-                      ? row.verificationRequired[0]
-                      : "None"}
+                    {Array.isArray(row.verificationRequired)
+                      ? row.verificationRequired.join(", ") || "None"
+                      : row.verificationRequired ?? "None"}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
                     {row.kycLevel}

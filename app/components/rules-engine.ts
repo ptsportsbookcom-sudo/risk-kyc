@@ -45,6 +45,7 @@ export type RulesEngineResult = {
   };
   finalDecision: {
     verification: string[];
+    primaryVerification: string | null;
     kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];
@@ -199,6 +200,7 @@ function getEmptyResult(): RulesEngineResult {
     },
     finalDecision: {
       verification: [],
+      primaryVerification: null,
       kycLevel: "L0",
       restriction: null,
       flags: [],
@@ -349,7 +351,8 @@ export function resolveDecision(input: {
   return {
     aggregatedActions,
     finalDecision: {
-      verification: aggregatedActions.verifications,
+      verification: aggregatedActions.verifications || [],
+      primaryVerification: aggregatedActions.verifications?.[0] || null,
       kycLevel: finalKycLevel,
       restriction: finalRestriction,
       flags: uniqueFlags,
