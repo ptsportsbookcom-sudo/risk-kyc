@@ -20,6 +20,11 @@ export type KycDocument = {
   file: string;
 };
 
+export type CaseNote = {
+  text: string;
+  createdAt: string;
+};
+
 export type KycCase = {
   id: string;
   userId: string;
@@ -37,6 +42,7 @@ export type KycCase = {
   fraudFlags?: string[];
   restrictions: string[];
   flags?: string[];
+  notes: CaseNote[];
   documents: KycDocument[];
 };
 
@@ -61,6 +67,7 @@ type KycCasesContextValue = {
   cases: KycCase[];
   addCase: (input: CreateKycCaseInput) => void;
   updateCaseStatus: (caseId: string, status: ReviewStatus) => void;
+  addCaseNote: (caseId: string, text: string) => void;
   uploadDocument: (caseId: string, type: DocumentType, file?: string) => void;
   updateDocumentStatus: (
     caseId: string,
@@ -133,6 +140,13 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
             normalizeRestrictionsForStatus({
               ...kycCase,
               kycLevel: kycCase.kycLevel ?? getKycLevel(kycCase.verificationRequired ?? []),
+              status: (kycCase.status ?? "Pending") as ReviewStatus,
+              flags: Array.isArray(kycCase.flags) ? kycCase.flags : [],
+              notes: Array.isArray(kycCase.notes) ? kycCase.notes : [],
+              triggeredRules: Array.isArray(kycCase.triggeredRules)
+                ? kycCase.triggeredRules
+                : [],
+              fraudFlags: Array.isArray(kycCase.fraudFlags) ? kycCase.fraudFlags : [],
               documents: Array.isArray(kycCase.documents) ? kycCase.documents : [],
             })
           )
@@ -175,6 +189,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         fraudFlags: input.fraudFlags ?? [],
         restrictions: input.restrictions,
         flags: input.flags ?? [],
+        notes: [],
         documents: [],
       },
       ...currentCases,
@@ -188,6 +203,27 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
           ? normalizeRestrictionsForStatus({ ...kycCase, status })
           : kycCase
       )
+    );
+  };
+
+  const addCaseNote = (caseId: string, text: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
+
+    setCases((currentCases) =>
+      currentCases.map((kycCase) => {
+        if (kycCase.id !== caseId) {
+          return kycCase;
+        }
+
+        return {
+          ...kycCase,
+          notes: [
+            ...kycCase.notes,
+            { text: normalizedText, createdAt: new Date().toISOString() },
+          ],
+        };
+      })
     );
   };
 
@@ -247,6 +283,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
       cases,
       addCase,
       updateCaseStatus,
+      addCaseNote,
       uploadDocument,
       updateDocumentStatus,
     }),

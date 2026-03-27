@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
 
@@ -11,11 +12,22 @@ function toSourceLabel(source: "manual" | "simulation" | "self-exclusion" | unde
   return "rule";
 }
 
+function statusClass(status: string) {
+  if (status === "Approved") {
+    return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+  }
+  if (status === "Rejected") {
+    return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
+  }
+  return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+}
+
 export default function CaseManagementDetailPage() {
   const params = useParams<{ id: string }>();
   const caseId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { cases } = useKycCases();
+  const { addCaseNote, cases, updateCaseStatus } = useKycCases();
   const { getPlayerById } = usePlayers();
+  const [noteText, setNoteText] = useState("");
 
   const selectedCase = cases.find((item) => item.id === caseId);
 
@@ -41,12 +53,32 @@ export default function CaseManagementDetailPage() {
   const decisionFlags = selectedCase.flags ?? [];
   const triggeredRules = selectedCase.triggeredRules ?? [];
   const fraudFlags = selectedCase.fraudFlags ?? selectedCase.flags ?? [];
+  const isResolved =
+    selectedCase.status === "Approved" || selectedCase.status === "Rejected";
+
+  const handleSaveNote = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!noteText.trim()) return;
+    addCaseNote(selectedCase.id, noteText);
+    setNoteText("");
+  };
 
   return (
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-lg font-semibold text-slate-900">Case Management</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Case Management</h3>
+            <div className="mt-2">
+              <span
+                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                  selectedCase.status
+                )}`}
+              >
+                Status: {selectedCase.status}
+              </span>
+            </div>
+          </div>
           <Link
             href="/review"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -64,6 +96,24 @@ export default function CaseManagementDetailPage() {
             value={decisionFlags.length > 0 ? decisionFlags.join(", ") : "None"}
           />
           <InfoItem label="Source" value={toSourceLabel(selectedCase.source)} />
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            disabled={isResolved}
+            onClick={() => updateCaseStatus(selectedCase.id, "Approved")}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={isResolved}
+            onClick={() => updateCaseStatus(selectedCase.id, "Rejected")}
+            className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reject
+          </button>
         </div>
       </section>
 
@@ -118,6 +168,44 @@ export default function CaseManagementDetailPage() {
               {fraudFlags.length > 0 ? fraudFlags.join(", ") : "None"}
             </p>
           </article>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          Notes
+        </h4>
+        <form className="mt-3 flex gap-2" onSubmit={handleSaveNote}>
+          <input
+            type="text"
+            value={noteText}
+            onChange={(event) => setNoteText(event.target.value)}
+            placeholder="Add a case note..."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+          >
+            Save
+          </button>
+        </form>
+        <div className="mt-4 space-y-2">
+          {selectedCase.notes.length > 0 ? (
+            selectedCase.notes.map((note, index) => (
+              <article
+                key={`${note.createdAt}-${index}`}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="text-sm text-slate-800">{note.text}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {new Date(note.createdAt).toLocaleString()}
+                </p>
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">No notes yet.</p>
+          )}
         </div>
       </section>
     </div>
