@@ -54,6 +54,7 @@ export type KycCase = {
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];
+    riskScore?: number;
   };
   restrictions: string[];
   flags?: string[];
@@ -79,6 +80,7 @@ type CreateKycCaseInput = {
     kycLevel: KycLevel;
     restriction: string | null;
     flags: string[];
+    riskScore?: number;
   };
   createdAt?: string;
   status?: ReviewStatus;

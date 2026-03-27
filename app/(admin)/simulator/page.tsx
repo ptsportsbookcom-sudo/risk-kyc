@@ -60,6 +60,7 @@ type BulkSimulationResult = {
     kycLevel: "L0" | "L1" | "L2" | "L3";
     restriction: string | null;
     flags: string[];
+    riskScore?: number;
   };
   fraudFlags: string[];
 };
@@ -468,6 +469,7 @@ export default function SimulatorPage() {
           kycLevel: engineResult.finalDecision.kycLevel,
           restriction: engineResult.finalDecision.restriction,
           flags: engineResult.finalDecision.flags,
+          riskScore: engineResult.finalDecision.riskScore ?? 0,
         },
         fraudFlags: engineResult.detectedFraudSignals,
       };
@@ -914,6 +916,21 @@ export default function SimulatorPage() {
         ) : (
           <div className="mt-4 space-y-3">
             {bulkResults.map((item) => (
+              (() => {
+                const score = item.finalDecision?.riskScore ?? 0;
+                let riskLabel = "Low";
+                if (score >= 80) riskLabel = "Critical";
+                else if (score >= 60) riskLabel = "High";
+                else if (score >= 40) riskLabel = "Medium";
+                const riskColor =
+                  score >= 80
+                    ? "text-red-600"
+                    : score >= 60
+                      ? "text-orange-600"
+                      : score >= 40
+                        ? "text-yellow-600"
+                        : "text-green-600";
+                return (
               <article
                 key={item.scenario.id}
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4"
@@ -962,7 +979,23 @@ export default function SimulatorPage() {
                 <p className="mt-1 text-sm text-slate-700">
                   Final KYC Level: {item.finalDecision.kycLevel}
                 </p>
+                <p className={`mt-1 text-sm font-semibold ${riskColor}`}>
+                  Risk Score: {score} ({riskLabel})
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Risk Score is calculated based on triggered rules and fraud signals. Higher
+                  score indicates higher fraud risk.
+                </p>
+                <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
+                  <li>Fraud Signals: {item.fraudFlags?.join(", ") || "None"}</li>
+                  <li>
+                    Triggered Rules:{" "}
+                    {item.triggeredRules?.map((rule) => rule.name).join(", ") || "None"}
+                  </li>
+                </ul>
               </article>
+                );
+              })()
             ))}
           </div>
         )}
