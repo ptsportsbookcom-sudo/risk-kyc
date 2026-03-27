@@ -117,14 +117,25 @@ export function resolveAggregatedActions(aggregatedActions: AggregatedActionsInp
   };
 }
 
-function evaluateOperator(left: number | string, operator: string, rightRaw: string) {
+function evaluateOperator(
+  left: number | string,
+  operator: string,
+  rightRaw: string,
+  valueByField?: Record<string, number | string>
+) {
+  const resolvedRightValue =
+    rightRaw.startsWith("$") && valueByField
+      ? valueByField[rightRaw.slice(1)] ?? rightRaw
+      : rightRaw;
+
   if (typeof left === "string") {
-    if (operator === "==") return left === rightRaw;
-    if (operator === "!=") return left !== rightRaw;
+    const right = String(resolvedRightValue);
+    if (operator === "==") return left === right;
+    if (operator === "!=") return left !== right;
     return false;
   }
 
-  const right = Number(rightRaw);
+  const right = Number(resolvedRightValue);
   if (Number.isNaN(right)) return false;
 
   if (operator === "==") return left === right;
@@ -168,7 +179,7 @@ function evaluateCondition(
 
   const left = valueByField[condition.field];
   if (left === undefined) return false;
-  return evaluateOperator(left, condition.operator, condition.value);
+  return evaluateOperator(left, condition.operator, condition.value, valueByField);
 }
 
 function doesRuleMatch(rule: Rule, playerData: RulesEngineInput["playerData"]) {

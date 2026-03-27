@@ -1,11 +1,16 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import {
+  createAutoRulesFromScenarios,
+  createScenarioSimulationInputs,
+  ScenarioId,
+  scenarioTemplates,
+} from "@/app/components/automation-scenarios";
 import { VerificationType } from "@/app/components/kyc-cases-context";
 import { runRulesEngine } from "@/app/components/rules-engine";
 import {
   EventType,
-  Rule,
   RuleConditionCategory,
   RuleField,
   RuleLogic,
@@ -125,11 +130,15 @@ function formatRestrictionLabel(option: string) {
 }
 
 type BulkScenario = {
+  scenarioId: ScenarioId;
+  label: string;
   player: {
-    deposit: number;
+    depositAmount: number;
     deviceCount: number;
     ipCountry: string;
     accountCountry: string;
+    bonusesUsed: number;
+    betCountLastMinute: number;
   };
   triggeredRules: Array<{ id: string; name: string; priority: number }>;
   finalDecision: {
@@ -139,121 +148,6 @@ type BulkScenario = {
     flags: string[];
   };
 };
-
-function getAutoRules(): Omit<Rule, "id">[] {
-  return [
-    {
-      name: "AUTO: Deposit > 100 -> ID",
-      source: "auto",
-      eventType: "Deposit",
-      conditions: [
-        { category: "Transaction", field: "depositAmount", operator: ">", value: "100" },
-      ],
-      conditionLogic: "ALL",
-      conditionGroups: [],
-      groupLogic: "ALL",
-      field: "depositAmount",
-      operator: ">",
-      value: "100",
-      actions: { verifications: ["ID"], restrictions: [], flags: [] },
-      priority: 10,
-      enabled: true,
-      stopProcessing: false,
-      verificationRequired: ["ID"],
-      restrictions: [],
-      flags: [],
-    },
-    {
-      name: "AUTO: Deposit > 500 -> Selfie",
-      source: "auto",
-      eventType: "Deposit",
-      conditions: [
-        { category: "Transaction", field: "depositAmount", operator: ">", value: "500" },
-      ],
-      conditionLogic: "ALL",
-      conditionGroups: [],
-      groupLogic: "ALL",
-      field: "depositAmount",
-      operator: ">",
-      value: "500",
-      actions: { verifications: ["Selfie"], restrictions: [], flags: [] },
-      priority: 20,
-      enabled: true,
-      stopProcessing: false,
-      verificationRequired: ["Selfie"],
-      restrictions: [],
-      flags: [],
-    },
-    {
-      name: "AUTO: Deposit >= 1000 -> Full KYC",
-      source: "auto",
-      eventType: "Deposit",
-      conditions: [
-        { category: "Transaction", field: "depositAmount", operator: ">=", value: "1000" },
-      ],
-      conditionLogic: "ALL",
-      conditionGroups: [],
-      groupLogic: "ALL",
-      field: "depositAmount",
-      operator: ">=",
-      value: "1000",
-      actions: { verifications: ["Full KYC"], restrictions: [], flags: [] },
-      priority: 30,
-      enabled: true,
-      stopProcessing: false,
-      verificationRequired: ["Full KYC"],
-      restrictions: [],
-      flags: [],
-    },
-    {
-      name: "AUTO: Device Count > 3 -> MULTI_ACCOUNT",
-      source: "auto",
-      eventType: "ANY",
-      conditions: [
-        { category: "Player", field: "deviceCount", operator: ">", value: "3" },
-      ],
-      conditionLogic: "ALL",
-      conditionGroups: [],
-      groupLogic: "ALL",
-      field: "deviceCount",
-      operator: ">",
-      value: "3",
-      actions: { verifications: [], restrictions: [], flags: ["MULTI_ACCOUNT"] },
-      priority: 40,
-      enabled: true,
-      stopProcessing: false,
-      verificationRequired: [],
-      restrictions: [],
-      flags: ["MULTI_ACCOUNT"],
-    },
-    {
-      name: "AUTO: IP Country != Account Country -> COUNTRY_MISMATCH",
-      source: "auto",
-      eventType: "ANY",
-      conditions: [
-        {
-          category: "Risk",
-          field: "flags",
-          operator: "==",
-          value: "COUNTRY_MISMATCH",
-        },
-      ],
-      conditionLogic: "ALL",
-      conditionGroups: [],
-      groupLogic: "ALL",
-      field: "flags",
-      operator: "==",
-      value: "COUNTRY_MISMATCH",
-      actions: { verifications: [], restrictions: [], flags: ["COUNTRY_MISMATCH"] },
-      priority: 50,
-      enabled: true,
-      stopProcessing: false,
-      verificationRequired: [],
-      restrictions: [],
-      flags: ["COUNTRY_MISMATCH"],
-    },
-  ];
-}
 
 export default function RulesPage() {
   const { rules, addRule } = useRules();
@@ -286,6 +180,15 @@ export default function RulesPage() {
   const [flags, setFlags] = useState<string[]>([]);
   const [isLiveOnly, setIsLiveOnly] = useState(false);
   const [bulkSimulations, setBulkSimulations] = useState<BulkScenario[]>([]);
+  const [selectedScenarioIds, setSelectedScenarioIds] = useState<ScenarioId[]>(
+    scenarioTemplates.map((item) => item.id)
+  );
+
+  const toggleScenario = (id: ScenarioId) => {
+    setSelectedScenarioIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
@@ -431,48 +334,37 @@ export default function RulesPage() {
   };
 
   const handleGenerateTestRules = () => {
+    if (selectedScenarioIds.length === 0) return;
     const existingAutoNames = new Set(
       rules.filter((rule) => rule.source === "auto").map((rule) => rule.name)
     );
-    const autoRules = getAutoRules().filter((rule) => !existingAutoNames.has(rule.name));
+    const autoRules = createAutoRulesFromScenarios(selectedScenarioIds).filter(
+      (rule) => !existingAutoNames.has(rule.name)
+    );
     autoRules.forEach((rule) => addRule(rule));
   };
 
   const handleRunBulkSimulation = () => {
-    const scenarios = [
-      { deposit: 50, deviceCount: 1, ipCountry: "United States", accountCountry: "United States" },
-      { deposit: 300, deviceCount: 2, ipCountry: "United States", accountCountry: "United States" },
-      { deposit: 1000, deviceCount: 4, ipCountry: "United States", accountCountry: "United States" },
-      { deposit: 2000, deviceCount: 2, ipCountry: "Germany", accountCountry: "France" },
-    ];
-
+    if (selectedScenarioIds.length === 0) return;
+    const scenarios = createScenarioSimulationInputs(selectedScenarioIds);
     const results = scenarios.map((scenario) => {
       const engineResult = runRulesEngine({
-        eventType: "Deposit",
-        playerData: {
-          depositAmount: scenario.deposit,
-          withdrawalAmount: 0,
-          totalDeposits: scenario.deposit,
-          depositCount: 1,
-          withdrawalCount: 0,
-          lastDepositTimestamp: Date.now(),
-          lastBetTimestamp: Date.now(),
-          betCountLastMinute: 0,
-          bonusesUsed: 0,
-          country: scenario.accountCountry,
-          ipCountry: scenario.ipCountry,
-          accountCountry: scenario.accountCountry,
-          deviceCount: scenario.deviceCount,
-          kycLevel: "L0",
-          betAmount: 0,
-          odds: 0,
-          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
-        },
+        eventType: scenario.eventType,
+        playerData: scenario.playerData,
         rules,
       });
 
       return {
-        player: scenario,
+        scenarioId: scenario.id,
+        label: scenario.label,
+        player: {
+          depositAmount: scenario.playerData.depositAmount,
+          deviceCount: scenario.playerData.deviceCount,
+          ipCountry: scenario.playerData.ipCountry,
+          accountCountry: scenario.playerData.accountCountry,
+          bonusesUsed: scenario.playerData.bonusesUsed,
+          betCountLastMinute: scenario.playerData.betCountLastMinute,
+        },
         triggeredRules: engineResult.triggeredRules,
         finalDecision: {
           verification: engineResult.finalDecision.verification,
@@ -538,6 +430,25 @@ export default function RulesPage() {
         <p className="mt-1 text-sm text-slate-600">
           Build KYC trigger rules for event-driven risk controls.
         </p>
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-semibold text-slate-800">Automation Scenarios</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {scenarioTemplates.map((scenario) => (
+              <label
+                key={scenario.id}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedScenarioIds.includes(scenario.id)}
+                  onChange={() => toggleScenario(scenario.id)}
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                />
+                {scenario.label}
+              </label>
+            ))}
+          </div>
+        </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
@@ -1362,12 +1273,14 @@ export default function RulesPage() {
           <div className="mt-4 space-y-3">
             {bulkSimulations.map((result, index) => (
               <article
-                key={`${result.player.deposit}-${result.player.deviceCount}-${index}`}
+                key={`${result.scenarioId}-${result.player.deviceCount}-${index}`}
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4"
               >
                 <p className="text-sm font-semibold text-slate-900">
-                  Player: deposit={result.player.deposit}, deviceCount={result.player.deviceCount},
-                  ipCountry={result.player.ipCountry}, accountCountry={result.player.accountCountry}
+                  {result.label}: deposit={result.player.depositAmount}, deviceCount=
+                  {result.player.deviceCount}, ipCountry={result.player.ipCountry}, accountCountry=
+                  {result.player.accountCountry}, bonusesUsed={result.player.bonusesUsed},
+                  betCountLastMinute={result.player.betCountLastMinute}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Triggered Rules:{" "}

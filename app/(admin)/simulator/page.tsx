@@ -2,6 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import {
+  createScenarioSimulationInputs,
+  scenarioTemplates,
+} from "@/app/components/automation-scenarios";
+import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
@@ -34,10 +38,13 @@ type SimulationResult = {
 
 type BulkScenario = {
   id: string;
+  label: string;
   depositAmount: number;
   deviceCount: number;
   ipCountry: string;
   accountCountry: string;
+  bonusesUsed: number;
+  betCountLastMinute: number;
 };
 
 type BulkSimulationResult = {
@@ -405,46 +412,30 @@ export default function SimulatorPage() {
   };
 
   const runBulkSimulation = () => {
-    const scenarios: BulkScenario[] = [
-      {
-        id: "BULK-1",
-        depositAmount: 1500,
-        deviceCount: 4,
-        ipCountry: "US",
-        accountCountry: "US",
-      },
-      {
-        id: "BULK-2",
-        depositAmount: 1500,
-        deviceCount: 1,
-        ipCountry: "UK",
-        accountCountry: "US",
-      },
-      {
-        id: "BULK-3",
-        depositAmount: 1500,
-        deviceCount: 4,
-        ipCountry: "UK",
-        accountCountry: "US",
-      },
-      {
-        id: "BULK-4",
-        depositAmount: 50,
-        deviceCount: 4,
-        ipCountry: "UK",
-        accountCountry: "US",
-      },
-    ];
+    const scenarioInputs = createScenarioSimulationInputs(
+      scenarioTemplates.map((item) => item.id)
+    );
+    const scenarios: BulkScenario[] = scenarioInputs.map((item, index) => ({
+      id: `BULK-${index + 1}`,
+      label: item.label,
+      depositAmount: item.playerData.depositAmount,
+      deviceCount: item.playerData.deviceCount,
+      ipCountry: item.playerData.ipCountry,
+      accountCountry: item.playerData.accountCountry,
+      bonusesUsed: item.playerData.bonusesUsed,
+      betCountLastMinute: item.playerData.betCountLastMinute,
+    }));
 
-    const results = scenarios.map((scenario) => {
+    const results = scenarios.map((scenario, index) => {
+      const baseScenario = scenarioInputs[index];
       const simulationInput = {
-        eventType: "Deposit" as const,
+        eventType: baseScenario.eventType,
         playerData: {
-          depositAmount: scenario.depositAmount,
-          deviceCount: scenario.deviceCount,
-          ipCountry: scenario.ipCountry,
-          accountCountry: scenario.accountCountry,
-          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
+          depositAmount: baseScenario.playerData.depositAmount,
+          deviceCount: baseScenario.playerData.deviceCount,
+          ipCountry: baseScenario.playerData.ipCountry,
+          accountCountry: baseScenario.playerData.accountCountry,
+          flags: baseScenario.playerData.flags,
         },
       };
       const bulkInput = {
@@ -452,20 +443,20 @@ export default function SimulatorPage() {
         playerData: {
           depositAmount: simulationInput.playerData.depositAmount,
           withdrawalAmount: 0,
-          totalDeposits: scenario.depositAmount,
-          depositCount: 1,
-          withdrawalCount: 0,
-          lastDepositTimestamp: Date.now(),
-          lastBetTimestamp: Date.now(),
-          betCountLastMinute: 0,
-          bonusesUsed: 0,
-          country: scenario.accountCountry,
+          totalDeposits: baseScenario.playerData.totalDeposits,
+          depositCount: baseScenario.playerData.depositCount,
+          withdrawalCount: baseScenario.playerData.withdrawalCount,
+          lastDepositTimestamp: baseScenario.playerData.lastDepositTimestamp,
+          lastBetTimestamp: baseScenario.playerData.lastBetTimestamp,
+          betCountLastMinute: baseScenario.playerData.betCountLastMinute,
+          bonusesUsed: baseScenario.playerData.bonusesUsed,
+          country: baseScenario.playerData.country,
           ipCountry: simulationInput.playerData.ipCountry,
           accountCountry: simulationInput.playerData.accountCountry,
           deviceCount: simulationInput.playerData.deviceCount,
           kycLevel: "L0",
-          betAmount: 0,
-          odds: 0,
+          betAmount: baseScenario.playerData.betAmount,
+          odds: baseScenario.playerData.odds,
           flags: simulationInput.playerData.flags,
         },
       };
@@ -919,9 +910,11 @@ export default function SimulatorPage() {
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4"
               >
                 <p className="text-sm font-semibold text-slate-900">
-                  Scenario {item.scenario.id}: deposit={item.scenario.depositAmount}, deviceCount=
-                  {item.scenario.deviceCount}, ipCountry={item.scenario.ipCountry}, accountCountry=
-                  {item.scenario.accountCountry}
+                  Scenario {item.scenario.id} ({item.scenario.label}): deposit=
+                  {item.scenario.depositAmount}, deviceCount={item.scenario.deviceCount},
+                  ipCountry={item.scenario.ipCountry}, accountCountry=
+                  {item.scenario.accountCountry}, bonusesUsed={item.scenario.bonusesUsed},
+                  betCountLastMinute={item.scenario.betCountLastMinute}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
                   Triggered Rules:{" "}
