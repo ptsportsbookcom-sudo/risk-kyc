@@ -132,10 +132,10 @@ export default function ManualTriggerPage() {
     const normalizedUsername = username.trim() || "manual_user";
     const input = {
       Transaction: {
-        depositAmount: 1000,
-        withdrawalAmount: 200,
-        totalDeposits: 2000,
-        depositCount: 6,
+        depositAmount: 1500,
+        withdrawalAmount: 300,
+        totalDeposits: 3000,
+        depositCount: 7,
         withdrawalCount: 2,
       },
       Player: {
@@ -146,12 +146,12 @@ export default function ManualTriggerPage() {
         kycLevel: "L0",
       },
       Behavior: {
-        bonusesUsed: 3,
+        bonusesUsed: 4,
         betCountLastMinute: 25,
         lastDepositTimestamp: Date.now(),
         lastBetTimestamp: Date.now(),
-        betAmount: 100,
-        odds: 3.0,
+        betAmount: 120,
+        odds: 3.2,
         flags: [],
       },
     };
@@ -160,7 +160,7 @@ export default function ManualTriggerPage() {
       input,
       rules,
     });
-    console.log("RESULT:", result);
+    console.log("MANUAL RESULT:", result);
     const finalVerifications = result.aggregatedActions.verifications as VerificationType[];
     const finalRestrictions = result.aggregatedActions.restrictions as RestrictionType[];
 
@@ -190,10 +190,13 @@ export default function ManualTriggerPage() {
       verificationRequired: finalVerifications,
       kycLevel: result.finalDecision.kycLevel,
       restrictions: finalRestrictions,
-      flags: result.flags,
-      triggeredRules: result.triggeredRules,
-      fraudFlags: result.detectedFraudSignals,
-      riskScore: result.riskScore,
+      flags: result.flags || [],
+      triggeredRules: result.triggeredRules || [],
+      fraudFlags: result.detectedFraudSignals || [],
+      riskScore:
+        result.riskScore ??
+        (result.triggeredRules?.length || 0) * 15 +
+          (result.detectedFraudSignals?.length || 0) * 20,
       finalDecision: result.finalDecision,
       source: "manual",
       reason: reason.trim(),
