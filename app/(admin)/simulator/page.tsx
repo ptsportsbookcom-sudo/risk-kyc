@@ -474,6 +474,10 @@ export default function SimulatorPage() {
     });
 
     setBulkResults(results);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("simulationResults", JSON.stringify(results));
+      window.dispatchEvent(new Event("kyc-data-updated"));
+    }
     setBulkCaseMessage("");
   };
 
@@ -521,6 +525,13 @@ export default function SimulatorPage() {
     });
 
     setBulkCaseMessage(`✔ ${createdCount} cases created from simulation`);
+    if (typeof window !== "undefined") {
+      const savedCases = window.localStorage.getItem("kyc_cases");
+      if (savedCases) {
+        window.localStorage.setItem("kycCases", savedCases);
+      }
+      window.dispatchEvent(new Event("kyc-data-updated"));
+    }
   };
 
   const resetSimulationsOnly = () => {
@@ -547,6 +558,24 @@ export default function SimulatorPage() {
     setActionCheckResult("");
     setActivePlayerId("");
     setResetMessage("System reset successfully");
+  };
+
+  const resetSystemStorage = () => {
+    const confirmed = window.confirm(
+      "Reset System will clear browser local storage and refresh UI. Continue?"
+    );
+    if (!confirmed) return;
+    window.localStorage.clear();
+    resetRules();
+    resetCasesData();
+    resetPlayers();
+    setResult(initialResult);
+    setBulkResults([]);
+    setBulkCaseMessage("");
+    setActionCheckResult("");
+    setActivePlayerId("");
+    setResetMessage("System storage reset successfully");
+    window.dispatchEvent(new Event("kyc-data-updated"));
   };
 
   return (
@@ -612,6 +641,13 @@ export default function SimulatorPage() {
             className="min-h-11 w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 sm:w-auto"
           >
             Reset All Data
+          </button>
+          <button
+            type="button"
+            onClick={resetSystemStorage}
+            className="min-h-11 w-full rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 sm:w-auto"
+          >
+            Reset System
           </button>
         </div>
         {resetMessage ? (

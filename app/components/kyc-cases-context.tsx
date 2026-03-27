@@ -203,6 +203,8 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
 
     window.localStorage.setItem(KYC_CASES_STORAGE_KEY, JSON.stringify(cases));
     window.localStorage.setItem(KYC_AUDIT_LOGS_STORAGE_KEY, JSON.stringify(auditLogs));
+    window.localStorage.setItem("kycCases", JSON.stringify(cases));
+    window.dispatchEvent(new Event("kyc-data-updated"));
   }, [cases, auditLogs, isHydrated]);
 
   const addAuditLog = (input: {

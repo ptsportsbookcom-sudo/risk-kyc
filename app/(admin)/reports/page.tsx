@@ -1,8 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import { useKycCases } from "@/app/components/kyc-cases-context";
-import { usePlayers } from "@/app/components/players-context";
+import { useEffect, useMemo, useState } from "react";
 
 const fraudSignals = [
   "MULTI_ACCOUNT",
@@ -13,17 +11,45 @@ const fraudSignals = [
 ] as const;
 
 export default function ReportsPage() {
-  const { cases } = useKycCases();
-  const { players } = usePlayers();
+  const readCasesFromStorage = () => {
+    const fallback: Array<{
+      userId: string;
+      status: string;
+      kycLevel: "L0" | "L1" | "L2" | "L3";
+      verificationRequired?: string[];
+      flags?: string[];
+      fraudFlags?: string[];
+    }> = [];
+    if (typeof window === "undefined") return fallback;
+    try {
+      const rawCases =
+        window.localStorage.getItem("kycCases") ?? window.localStorage.getItem("kyc_cases");
+      const parsedCases = rawCases ? JSON.parse(rawCases) : [];
+      return Array.isArray(parsedCases) ? parsedCases : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const [cases, setCases] = useState(readCasesFromStorage);
+
+  useEffect(() => {
+    const onUpdated = () => setCases(readCasesFromStorage());
+    window.addEventListener("kyc-data-updated", onUpdated);
+    window.addEventListener("storage", onUpdated);
+    return () => {
+      window.removeEventListener("kyc-data-updated", onUpdated);
+      window.removeEventListener("storage", onUpdated);
+    };
+  }, []);
 
   const metrics = useMemo(() => {
-    const totalUsers = players.length;
-    const usersL0 = players.filter((item) => item.kycLevel === "L0").length;
-    const usersL1 = players.filter((item) => item.kycLevel === "L1").length;
-    const usersL2 = players.filter((item) => item.kycLevel === "L2").length;
-    const usersL3 = players.filter((item) => item.kycLevel === "L3").length;
+    const totalUsers = new Set(cases.map((item) => item.userId)).size;
+    const usersL0 = cases.filter((item) => item.kycLevel === "L0").length;
+    const usersL1 = cases.filter((item) => item.kycLevel === "L1").length;
+    const usersL2 = cases.filter((item) => item.kycLevel === "L2").length;
+    const usersL3 = cases.filter((item) => item.kycLevel === "L3").length;
     const kycRequiredCount = cases.filter(
-      (item) => item.verificationRequired.length > 0
+      (item) => (item.verificationRequired ?? []).length > 0
     ).length;
 
     const totalCases = cases.length;
@@ -52,7 +78,7 @@ export default function ReportsPage() {
       rejectedCases,
       fraudSignalCounts,
     };
-  }, [cases, players]);
+  }, [cases]);
 
   return (
     <div className="space-y-5">

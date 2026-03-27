@@ -2,7 +2,6 @@
 
 import { Rule } from "@/app/components/rules-context";
 import { getFraudSignals } from "@/app/components/fraud-signals";
-import { getKycLevel } from "@/app/components/kyc-levels";
 
 export type RulesEngineInput = {
   input: {
@@ -58,14 +57,15 @@ export type RulesEngineResult = {
   detectedFraudSignals: string[];
 };
 
-export type AggregatedActionsInput = {
-  verifications: string[];
-  restrictions: string[];
-  flags: string[];
-};
-
 export type EvaluateRulesResult = {
-  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  triggeredRules: Array<{
+    id: string;
+    name: string;
+    priority: number;
+    verificationRequired: string[];
+    restrictions: string[];
+    flags: string[];
+  }>;
   ruleActions: {
     verifications: string[];
     restrictions: string[];
@@ -74,55 +74,6 @@ export type EvaluateRulesResult = {
 };
 
 export type UnifiedRiskInput = RulesEngineInput["input"];
-
-const verificationPriority: Record<string, number> = {
-  ID: 1,
-  Selfie: 2,
-  Proof: 3,
-  "Full KYC": 4,
-};
-
-const restrictionPriority: Record<string, number> = {
-  "Deposit Block": 1,
-  "Withdrawal Block": 2,
-  "Casino Block": 3,
-  "Full Account Block": 4,
-};
-
-function pickHighestPriority(items: string[], priorityMap: Record<string, number>) {
-  if (items.length === 0) return null;
-  return [...items].sort(
-    (left, right) => (priorityMap[right] ?? 0) - (priorityMap[left] ?? 0)
-  )[0];
-}
-
-export function resolveAggregatedActions(aggregatedActions: AggregatedActionsInput) {
-  const normalizedVerifications = Array.from(new Set(aggregatedActions.verifications));
-  const computedKycLevel = getKycLevel(normalizedVerifications);
-  const verificationByLevel: Record<"L0" | "L1" | "L2" | "L3", string | null> = {
-    L0: null,
-    L1: "ID",
-    L2: "Selfie",
-    L3: "Full KYC",
-  };
-
-  return {
-    verification:
-      verificationByLevel[computedKycLevel] ??
-      pickHighestPriority(normalizedVerifications, verificationPriority),
-    kycLevel: computedKycLevel,
-    restriction: pickHighestPriority(
-      aggregatedActions.restrictions,
-      restrictionPriority
-    ),
-    flags: Array.from(new Set(aggregatedActions.flags)),
-    aggregatedActions: {
-      verifications: Array.from(new Set(aggregatedActions.verifications)),
-      restrictions: Array.from(new Set(aggregatedActions.restrictions)),
-      flags: Array.from(new Set(aggregatedActions.flags)),
-    },
-  };
-}
 
 function evaluateOperator(
   left: number | string,
@@ -268,17 +219,19 @@ export function evaluateRules(
   for (const rule of eligibleRules) {
     if (!doesRuleMatch(rule, normalizedInput)) continue;
 
-    triggeredRules.push({
-      id: rule.id,
-      name: rule.name || "Untitled Rule",
-      priority: rule.priority ?? 100,
-    });
-
     const actions = rule.actions ?? {
       verifications: rule.verificationRequired ?? [],
       restrictions: rule.restrictions ?? [],
       flags: rule.flags ?? [],
     };
+    triggeredRules.push({
+      id: rule.id,
+      name: rule.name || "Untitled Rule",
+      priority: rule.priority ?? 100,
+      verificationRequired: actions.verifications,
+      restrictions: actions.restrictions,
+      flags: actions.flags,
+    });
     actions.verifications.forEach((item) => verificationSet.add(item));
     actions.restrictions.forEach((item) => restrictionSet.add(item));
     actions.flags.forEach((item) => flagSet.add(item));
@@ -297,30 +250,64 @@ export function evaluateRules(
 }
 
 export function resolveDecision(input: {
-  triggeredRules: Array<{ id: string; name: string; priority: number }>;
-  ruleActions: {
-    verifications: string[];
+  triggeredRules: Array<{
+    id: string;
+    name: string;
+    priority: number;
+    verificationRequired: string[];
     restrictions: string[];
     flags: string[];
-  };
-  fraudSignals: string[];
+  }>;
+  fraudFlags: string[];
 }) {
-  const aggregatedActions = {
-    verifications: input.ruleActions.verifications,
-    restrictions: input.ruleActions.restrictions,
-    flags: Array.from(new Set([...input.ruleActions.flags, ...input.fraudSignals])),
+  const verificationLevels: string[] = [];
+  const restrictions: string[] = [];
+  const flags: string[] = [];
+
+  input.triggeredRules.forEach((rule) => {
+    verificationLevels.push(...(rule.verificationRequired ?? []));
+    restrictions.push(...(rule.restrictions ?? []));
+    flags.push(...(rule.flags ?? []));
+  });
+  flags.push(...input.fraudFlags);
+
+  const priorityOrder: Record<string, number> = {
+    ID: 1,
+    Selfie: 2,
+    "Full KYC": 3,
   };
-  const resolved = resolveAggregatedActions(aggregatedActions);
+  const highestVerification =
+    [...new Set(verificationLevels)].sort(
+      (left, right) => (priorityOrder[right] ?? 0) - (priorityOrder[left] ?? 0)
+    )[0] ?? null;
+  const finalVerification =
+    highestVerification ?? (input.triggeredRules.length > 0 ? "ID" : null);
+  const finalKycLevel: "L0" | "L1" | "L2" | "L3" =
+    finalVerification === "Full KYC"
+      ? "L3"
+      : finalVerification === "Selfie"
+        ? "L2"
+        : finalVerification === "ID"
+          ? "L1"
+          : "L0";
+
+  const uniqueRestrictions = Array.from(new Set(restrictions));
+  const uniqueFlags = Array.from(new Set(flags));
+  const aggregatedActions = {
+    verifications: finalVerification ? [finalVerification] : [],
+    restrictions: uniqueRestrictions,
+    flags: uniqueFlags,
+  };
 
   return {
     aggregatedActions,
     finalDecision: {
-      verification: resolved.verification,
-      kycLevel: resolved.kycLevel,
-      restriction: resolved.restriction,
-      flags: resolved.flags,
+      verification: finalVerification,
+      kycLevel: finalKycLevel,
+      restriction: uniqueRestrictions[0] ?? null,
+      flags: uniqueFlags,
       triggeredRules: input.triggeredRules,
-      aggregatedActions: resolved.aggregatedActions,
+      aggregatedActions,
     },
   };
 }
@@ -343,8 +330,7 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
   const evaluated = evaluateRules(input.input, input.rules);
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
-    ruleActions: evaluated.ruleActions,
-    fraudSignals: detectedFraudSignals,
+    fraudFlags: detectedFraudSignals,
   });
 
   const result = {

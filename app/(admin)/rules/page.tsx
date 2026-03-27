@@ -1,14 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import {
-  createAutoRulesFromScenarios,
-  createScenarioSimulationInputs,
-  ScenarioId,
-  scenarioTemplates,
-} from "@/app/components/automation-scenarios";
 import { VerificationType } from "@/app/components/kyc-cases-context";
-import { runRiskEngine } from "@/app/components/rules-engine";
 import {
   EventType,
   RuleConditionCategory,
@@ -129,26 +122,6 @@ function formatRestrictionLabel(option: string) {
   return `apply ${option}`;
 }
 
-type BulkScenario = {
-  scenarioId: string;
-  label: string;
-  player: {
-    depositAmount: number;
-    deviceCount: number;
-    ipCountry: string;
-    accountCountry: string;
-    bonusesUsed: number;
-    betCountLastMinute: number;
-  };
-  triggeredRules: Array<{ id: string; name: string; priority: number }>;
-  finalDecision: {
-    verification: string | null;
-    kycLevel: "L0" | "L1" | "L2" | "L3";
-    restriction: string | null;
-    flags: string[];
-  };
-};
-
 export default function RulesPage() {
   const { rules, addRule } = useRules();
   const [ruleName, setRuleName] = useState("");
@@ -179,16 +152,6 @@ export default function RulesPage() {
   const [restrictions, setRestrictions] = useState<RestrictionType[]>([]);
   const [flags, setFlags] = useState<string[]>([]);
   const [isLiveOnly, setIsLiveOnly] = useState(false);
-  const [bulkSimulations, setBulkSimulations] = useState<BulkScenario[]>([]);
-  const [selectedScenarioIds, setSelectedScenarioIds] = useState<ScenarioId[]>(
-    scenarioTemplates.map((item) => item.id)
-  );
-
-  const toggleScenario = (id: ScenarioId) => {
-    setSelectedScenarioIds((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    );
-  };
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>
@@ -333,74 +296,6 @@ export default function RulesPage() {
     onEventTypeChange("Registration");
   };
 
-  const handleGenerateTestRules = () => {
-    if (selectedScenarioIds.length === 0) return;
-    const existingAutoNames = new Set(
-      rules.filter((rule) => rule.source === "auto").map((rule) => rule.name)
-    );
-    const autoRules = createAutoRulesFromScenarios(selectedScenarioIds).filter(
-      (rule) => !existingAutoNames.has(rule.name)
-    );
-    autoRules.forEach((rule) => addRule(rule));
-  };
-
-  const handleRunBulkSimulation = () => {
-    if (selectedScenarioIds.length === 0) return;
-    const scenarios = createScenarioSimulationInputs(selectedScenarioIds);
-    const results = scenarios.map((scenario) => {
-      const engineResult = runRiskEngine({
-        input: {
-          Transaction: {
-            depositAmount: scenario.playerData.depositAmount,
-            withdrawalAmount: scenario.playerData.withdrawalAmount,
-            totalDeposits: scenario.playerData.totalDeposits,
-            depositCount: scenario.playerData.depositCount,
-            withdrawalCount: scenario.playerData.withdrawalCount,
-          },
-          Player: {
-            deviceCount: scenario.playerData.deviceCount,
-            ipCountry: scenario.playerData.ipCountry,
-            accountCountry: scenario.playerData.accountCountry,
-            country: scenario.playerData.country,
-            kycLevel: scenario.playerData.kycLevel,
-          },
-          Behavior: {
-            bonusesUsed: scenario.playerData.bonusesUsed,
-            betCountLastMinute: scenario.playerData.betCountLastMinute,
-            lastDepositTimestamp: scenario.playerData.lastDepositTimestamp,
-            lastBetTimestamp: scenario.playerData.lastBetTimestamp,
-            betAmount: scenario.playerData.betAmount,
-            odds: scenario.playerData.odds,
-            flags: scenario.playerData.flags,
-          },
-        },
-        rules,
-      });
-
-      return {
-        scenarioId: scenario.id,
-        label: scenario.label,
-        player: {
-          depositAmount: scenario.playerData.depositAmount,
-          deviceCount: scenario.playerData.deviceCount,
-          ipCountry: scenario.playerData.ipCountry,
-          accountCountry: scenario.playerData.accountCountry,
-          bonusesUsed: scenario.playerData.bonusesUsed,
-          betCountLastMinute: scenario.playerData.betCountLastMinute,
-        },
-        triggeredRules: engineResult.triggeredRules,
-        finalDecision: {
-          verification: engineResult.finalDecision.verification,
-          kycLevel: engineResult.finalDecision.kycLevel,
-          restriction: engineResult.finalDecision.restriction,
-          flags: engineResult.finalDecision.flags,
-        },
-      };
-    });
-
-    setBulkSimulations(results);
-  };
-
     const previewGroups = conditionGroups
       .map((group) => ({
         conditions: group.conditions.filter((c) => c.value.trim() !== ""),
@@ -453,42 +348,6 @@ export default function RulesPage() {
         <p className="mt-1 text-sm text-slate-600">
           Build KYC trigger rules for event-driven risk controls.
         </p>
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-sm font-semibold text-slate-800">Automation Scenarios</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {scenarioTemplates.map((scenario) => (
-              <label
-                key={scenario.id}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedScenarioIds.includes(scenario.id)}
-                  onChange={() => toggleScenario(scenario.id)}
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                />
-                {scenario.label}
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={handleGenerateTestRules}
-            className="min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100 sm:w-auto"
-          >
-            Generate Test Rules
-          </button>
-          <button
-            type="button"
-            onClick={handleRunBulkSimulation}
-            className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 sm:w-auto"
-          >
-            Run Bulk Simulation
-          </button>
-        </div>
-
         <form className="mt-5 space-y-6" onSubmit={onSaveRule}>
           <section className="space-y-2">
             <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
@@ -1231,9 +1090,6 @@ export default function RulesPage() {
                   {rule.name} - Event: {rule.eventType}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Source: {rule.source ?? "manual"}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
                   Priority: {rule.priority ?? 100} | Enabled:{" "}
                   {rule.enabled === false ? "No" : "Yes"} | Stop Processing:{" "}
                   {rule.stopProcessing ? "Yes" : "No"}
@@ -1286,48 +1142,6 @@ export default function RulesPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <h4 className="text-base font-semibold text-slate-900">Bulk Simulation Results</h4>
-        {bulkSimulations.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No bulk simulation run yet.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {bulkSimulations.map((result, index) => (
-              <article
-                key={`${result.scenarioId}-${result.player.deviceCount}-${index}`}
-                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm font-semibold text-slate-900">
-                  {result.label}: deposit={result.player.depositAmount}, deviceCount=
-                  {result.player.deviceCount}, ipCountry={result.player.ipCountry}, accountCountry=
-                  {result.player.accountCountry}, bonusesUsed={result.player.bonusesUsed},
-                  betCountLastMinute={result.player.betCountLastMinute}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Triggered Rules:{" "}
-                  {result.triggeredRules.length > 0
-                    ? result.triggeredRules.map((rule) => rule.name).join(", ")
-                    : "None"}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Final KYC Level: {result.finalDecision.kycLevel}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Restriction: {result.finalDecision.restriction ?? "None"}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Flags:{" "}
-                  {result.finalDecision.flags.length > 0
-                    ? result.finalDecision.flags.join(", ")
-                    : "None"}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }

@@ -1,24 +1,56 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useKycCases } from "@/app/components/kyc-cases-context";
-import { usePlayers } from "@/app/components/players-context";
+import { useEffect, useMemo, useState } from "react";
+
+type StoredCase = {
+  userId: string;
+  status: string;
+  restrictions?: string[];
+};
 
 export default function DashboardPage() {
-  const { players } = usePlayers();
-  const { cases } = useKycCases();
+  const readStorage = () => {
+    const fallback = { cases: [] as StoredCase[], activeSessions: 0 };
+    if (typeof window === "undefined") return fallback;
+    try {
+      const rawCases =
+        window.localStorage.getItem("kycCases") ?? window.localStorage.getItem("kyc_cases");
+      const parsedCases = rawCases ? (JSON.parse(rawCases) as StoredCase[]) : [];
+      const rawSimResults = window.localStorage.getItem("simulationResults");
+      const parsedSimResults = rawSimResults ? (JSON.parse(rawSimResults) as unknown[]) : [];
+      return {
+        cases: Array.isArray(parsedCases) ? parsedCases : [],
+        activeSessions: Array.isArray(parsedSimResults) ? parsedSimResults.length : 0,
+      };
+    } catch {
+      return fallback;
+    }
+  };
+  const initial = typeof window === "undefined" ? { cases: [], activeSessions: 0 } : readStorage();
+  const [cases, setCases] = useState<StoredCase[]>(initial.cases);
+  const [activeSessionsFromSim, setActiveSessionsFromSim] = useState(initial.activeSessions);
+
+  useEffect(() => {
+    const onUpdated = () => {
+      const next = readStorage();
+      setCases(next.cases);
+      setActiveSessionsFromSim(next.activeSessions);
+    };
+    window.addEventListener("kyc-data-updated", onUpdated);
+    window.addEventListener("storage", onUpdated);
+    return () => {
+      window.removeEventListener("kyc-data-updated", onUpdated);
+      window.removeEventListener("storage", onUpdated);
+    };
+  }, []);
 
   const metrics = useMemo(() => {
-    const totalUsers = players.length;
-    const validUserIds = new Set(players.map((player) => player.id));
-    const linkedCases = cases.filter((item) => validUserIds.has(item.userId));
-    const pendingCases = linkedCases.filter(
-      (item) => item.status.toLowerCase() === "pending"
-    );
-    const blockedUsers = players.filter(
-      (player) => player.restriction !== null || player.isSelfExcluded
+    const totalUsers = new Set(cases.map((item) => item.userId)).size;
+    const pendingCases = cases.filter((item) => item.status.toLowerCase() === "pending");
+    const blockedUsers = cases.filter((item) =>
+      (item.restrictions ?? []).includes("Full Account Block")
     ).length;
-    const activeSessions = totalUsers;
+    const activeSessions = activeSessionsFromSim > 0 ? activeSessionsFromSim : totalUsers;
 
     return {
       totalUsers,
@@ -26,7 +58,7 @@ export default function DashboardPage() {
       blockedUsers,
       activeSessions,
     };
-  }, [players, cases]);
+  }, [cases, activeSessionsFromSim]);
 
   useEffect(() => {
     console.log("players:", metrics.totalUsers);
@@ -41,7 +73,7 @@ export default function DashboardPage() {
     { label: "Active Sessions", value: metrics.activeSessions.toLocaleString() },
   ];
 
-  const showEmptyState = players.length === 0 && cases.length === 0;
+  const showEmptyState = cases.length === 0;
 
   return (
     <section className="space-y-6">
