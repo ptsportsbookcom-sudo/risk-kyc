@@ -132,33 +132,35 @@ export default function ManualTriggerPage() {
     const normalizedUsername = username.trim() || "manual_user";
     const input = {
       Transaction: {
-        depositAmount: 100,
-        withdrawalAmount: 50,
-        totalDeposits: 500,
-        depositCount: 3,
-        withdrawalCount: 1,
+        depositAmount: 1000,
+        withdrawalAmount: 200,
+        totalDeposits: 2000,
+        depositCount: 6,
+        withdrawalCount: 2,
       },
       Player: {
-        deviceCount: 4,
+        deviceCount: 5,
         ipCountry: "DE",
         accountCountry: "GB",
         country: "GB",
         kycLevel: "L0",
       },
       Behavior: {
-        bonusesUsed: 2,
-        betCountLastMinute: 12,
+        bonusesUsed: 3,
+        betCountLastMinute: 25,
         lastDepositTimestamp: Date.now(),
         lastBetTimestamp: Date.now(),
-        betAmount: 50,
-        odds: 2.5,
+        betAmount: 100,
+        odds: 3.0,
         flags: [],
       },
     };
+    console.log("MANUAL INPUT:", input);
     const result = runRiskEngine({
       input,
       rules,
     });
+    console.log("RESULT:", result);
     const finalVerifications = result.aggregatedActions.verifications as VerificationType[];
     const finalRestrictions = result.aggregatedActions.restrictions as RestrictionType[];
 
