@@ -33,6 +33,8 @@ export type KycCase = {
   reason?: string;
   selfExclusionDuration?: string;
   selfExclusionUntil?: string | null;
+  triggeredRules?: Array<{ id: string; name: string; priority: number }>;
+  fraudFlags?: string[];
   restrictions: string[];
   flags?: string[];
   documents: KycDocument[];
@@ -49,6 +51,8 @@ type CreateKycCaseInput = {
   reason?: string;
   selfExclusionDuration?: string;
   selfExclusionUntil?: string | null;
+  triggeredRules?: Array<{ id: string; name: string; priority: number }>;
+  fraudFlags?: string[];
   createdAt?: string;
   status?: ReviewStatus;
 };
@@ -167,6 +171,8 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         reason: input.reason,
         selfExclusionDuration: input.selfExclusionDuration,
         selfExclusionUntil: input.selfExclusionUntil,
+        triggeredRules: input.triggeredRules ?? [],
+        fraudFlags: input.fraudFlags ?? [],
         restrictions: input.restrictions,
         flags: input.flags ?? [],
         documents: [],

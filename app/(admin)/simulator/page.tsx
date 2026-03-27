@@ -209,6 +209,10 @@ export default function SimulatorPage() {
         verificationRequired: finalVerifications,
         kycLevel: resolvedKycLevel,
         restrictions: triggerResult.appliedRestrictions,
+        flags: engineResult.finalDecision.flags,
+        triggeredRules: engineResult.triggeredRules,
+        fraudFlags: engineResult.detectedFraudSignals,
+        source: "simulation",
       });
       createdCases = 1;
     }
@@ -317,6 +321,8 @@ export default function SimulatorPage() {
         updatedPlayer.selfExclusionUntil === null
           ? null
           : new Date(updatedPlayer.selfExclusionUntil).toISOString(),
+      triggeredRules: [],
+      fraudFlags: [],
     });
 
     setResult((currentResult) => ({

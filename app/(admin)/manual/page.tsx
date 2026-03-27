@@ -123,6 +123,8 @@ export default function ManualTriggerPage() {
       kycLevel: manualResult.finalDecision.kycLevel,
       restrictions: finalRestrictions,
       flags: manualResult.finalDecision.flags,
+      triggeredRules: manualResult.triggeredRules,
+      fraudFlags: [],
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),

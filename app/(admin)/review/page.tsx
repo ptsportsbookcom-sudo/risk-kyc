@@ -171,7 +171,7 @@ export default function ReviewPage() {
                 <tr
                   key={row.id}
                   className="cursor-pointer hover:bg-slate-50/70"
-                  onClick={() => router.push(`/review/${row.id}`)}
+                  onClick={() => router.push(`/cases/${row.id}`)}
                 >
                   <td className="px-4 py-3 text-sm font-medium text-slate-800">
                     {row.userId}
