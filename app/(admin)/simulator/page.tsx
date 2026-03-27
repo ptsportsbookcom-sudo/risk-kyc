@@ -51,7 +51,7 @@ const initialResult: SimulationResult = {
 
 export default function SimulatorPage() {
   const { rules } = useRules();
-  const { addCase } = useKycCases();
+  const { addAuditLog, addCase } = useKycCases();
   const {
     applyTriggerToPlayer,
     applySelfExclusion,
@@ -203,7 +203,7 @@ export default function SimulatorPage() {
       finalRestrictions.length > 0 ||
       engineResult.finalDecision.flags.length > 0
     ) {
-      addCase({
+      const caseId = addCase({
         userId: normalizedUserId,
         username: normalizedUsername,
         verificationRequired: finalVerifications,
@@ -213,6 +213,15 @@ export default function SimulatorPage() {
         triggeredRules: engineResult.triggeredRules,
         fraudFlags: engineResult.detectedFraudSignals,
         source: "simulation",
+      });
+      engineResult.triggeredRules.forEach((rule) => {
+        addAuditLog({
+          caseId,
+          userId: normalizedUserId,
+          type: "rule_triggered",
+          description: `Rule triggered: ${rule.name}`,
+          metadata: { ruleId: rule.id, priority: rule.priority },
+        });
       });
       createdCases = 1;
     }
@@ -308,7 +317,7 @@ export default function SimulatorPage() {
         ? "Permanent"
         : new Date(updatedPlayer.selfExclusionUntil).toLocaleString();
 
-    addCase({
+    const caseId = addCase({
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: [],
@@ -323,6 +332,16 @@ export default function SimulatorPage() {
           : new Date(updatedPlayer.selfExclusionUntil).toISOString(),
       triggeredRules: [],
       fraudFlags: [],
+    });
+    addAuditLog({
+      caseId,
+      userId: normalizedUserId,
+      type: "self_exclusion",
+      description: "User self-excluded",
+      metadata: {
+        duration: selfExclusionDuration,
+        reason,
+      },
     });
 
     setResult((currentResult) => ({

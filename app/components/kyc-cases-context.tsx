@@ -5,7 +5,6 @@ import {
   ReactNode,
   useContext,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import { getKycLevel, KycLevel } from "@/app/components/kyc-levels";
@@ -22,6 +21,16 @@ export type KycDocument = {
 
 export type CaseNote = {
   text: string;
+  createdAt: string;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  caseId: string;
+  userId: string;
+  type: string;
+  description: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 };
 
@@ -65,9 +74,17 @@ type CreateKycCaseInput = {
 
 type KycCasesContextValue = {
   cases: KycCase[];
-  addCase: (input: CreateKycCaseInput) => void;
+  auditLogs: AuditLogEntry[];
+  addCase: (input: CreateKycCaseInput) => string;
   updateCaseStatus: (caseId: string, status: ReviewStatus) => void;
   addCaseNote: (caseId: string, text: string) => void;
+  addAuditLog: (input: {
+    caseId: string;
+    userId: string;
+    type: string;
+    description: string;
+    metadata?: Record<string, unknown>;
+  }) => void;
   uploadDocument: (caseId: string, type: DocumentType, file?: string) => void;
   updateDocumentStatus: (
     caseId: string,
@@ -78,6 +95,7 @@ type KycCasesContextValue = {
 
 const KycCasesContext = createContext<KycCasesContextValue | undefined>(undefined);
 const KYC_CASES_STORAGE_KEY = "kyc_cases";
+const KYC_AUDIT_LOGS_STORAGE_KEY = "kyc_audit_logs";
 const ALL_DOCUMENT_TYPES: DocumentType[] = ["ID", "Selfie", "Proof"];
 
 function getRequiredDocumentTypes(verificationRequired: VerificationType[]) {
@@ -123,6 +141,7 @@ function normalizeRestrictionsForStatus(caseData: KycCase) {
 
 export function KycCasesProvider({ children }: { children: ReactNode }) {
   const [cases, setCases] = useState<KycCase[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -135,6 +154,8 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
       }
 
       const parsedCases = JSON.parse(savedCases) as KycCase[];
+      const savedLogs = window.localStorage.getItem(KYC_AUDIT_LOGS_STORAGE_KEY);
+      const parsedLogs = savedLogs ? (JSON.parse(savedLogs) as AuditLogEntry[]) : [];
       const normalizedCases = Array.isArray(parsedCases)
         ? parsedCases.map((kycCase) =>
             normalizeRestrictionsForStatus({
@@ -151,9 +172,12 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
             })
           )
         : [];
+      const normalizedLogs = Array.isArray(parsedLogs) ? parsedLogs : [];
       setCases(normalizedCases);
+      setAuditLogs(normalizedLogs);
     } catch {
       setCases([]);
+      setAuditLogs([]);
     } finally {
       setIsHydrated(true);
     }
@@ -165,15 +189,37 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
     }
 
     window.localStorage.setItem(KYC_CASES_STORAGE_KEY, JSON.stringify(cases));
-  }, [cases, isHydrated]);
+    window.localStorage.setItem(KYC_AUDIT_LOGS_STORAGE_KEY, JSON.stringify(auditLogs));
+  }, [cases, auditLogs, isHydrated]);
+
+  const addAuditLog = (input: {
+    caseId: string;
+    userId: string;
+    type: string;
+    description: string;
+    metadata?: Record<string, unknown>;
+  }) => {
+    const entry: AuditLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      caseId: input.caseId,
+      userId: input.userId,
+      type: input.type,
+      description: input.description,
+      metadata: input.metadata,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAuditLogs((current) => [entry, ...current]);
+  };
 
   const addCase = (input: CreateKycCaseInput) => {
     const now = new Date();
     const createdDate = now.toISOString().slice(0, 10);
+    const caseId = `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
 
     setCases((currentCases) => [
       {
-        id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: caseId,
         userId: input.userId,
         username: input.username,
         verificationRequired: input.verificationRequired,
@@ -194,9 +240,18 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
       },
       ...currentCases,
     ]);
+    addAuditLog({
+      caseId,
+      userId: input.userId,
+      type: "case_created",
+      description: `Case created from ${input.source ?? "simulation"}`,
+      metadata: { source: input.source ?? "simulation" },
+    });
+    return caseId;
   };
 
   const updateCaseStatus = (caseId: string, status: ReviewStatus) => {
+    const caseItem = cases.find((item) => item.id === caseId);
     setCases((currentCases) =>
       currentCases.map((kycCase) =>
         kycCase.id === caseId
@@ -204,6 +259,15 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
           : kycCase
       )
     );
+    if (caseItem) {
+      addAuditLog({
+        caseId,
+        userId: caseItem.userId,
+        type: "case_status_changed",
+        description: `Case marked as ${status.toLowerCase()}`,
+        metadata: { status },
+      });
+    }
   };
 
   const addCaseNote = (caseId: string, text: string) => {
@@ -225,6 +289,16 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         };
       })
     );
+    const caseItem = cases.find((item) => item.id === caseId);
+    if (caseItem) {
+      addAuditLog({
+        caseId,
+        userId: caseItem.userId,
+        type: "note_added",
+        description: "Note added to case",
+        metadata: { text: normalizedText },
+      });
+    }
   };
 
   const uploadDocument = (caseId: string, type: DocumentType, file?: string) => {
@@ -278,17 +352,16 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const value = useMemo(
-    () => ({
-      cases,
-      addCase,
-      updateCaseStatus,
-      addCaseNote,
-      uploadDocument,
-      updateDocumentStatus,
-    }),
-    [cases]
-  );
+  const value = {
+    cases,
+    auditLogs,
+    addCase,
+    updateCaseStatus,
+    addCaseNote,
+    addAuditLog,
+    uploadDocument,
+    updateDocumentStatus,
+  };
 
   return (
     <KycCasesContext.Provider value={value}>{children}</KycCasesContext.Provider>

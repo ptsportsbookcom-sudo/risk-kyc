@@ -25,7 +25,7 @@ function statusClass(status: string) {
 export default function CaseManagementDetailPage() {
   const params = useParams<{ id: string }>();
   const caseId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { addCaseNote, cases, updateCaseStatus } = useKycCases();
+  const { addCaseNote, auditLogs, cases, updateCaseStatus } = useKycCases();
   const { getPlayerById } = usePlayers();
   const [noteText, setNoteText] = useState("");
 
@@ -53,6 +53,11 @@ export default function CaseManagementDetailPage() {
   const decisionFlags = selectedCase.flags ?? [];
   const triggeredRules = selectedCase.triggeredRules ?? [];
   const fraudFlags = selectedCase.fraudFlags ?? selectedCase.flags ?? [];
+  const timelineItems = auditLogs
+    .filter((item) => item.caseId === selectedCase.id)
+    .sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   const isResolved =
     selectedCase.status === "Approved" || selectedCase.status === "Rejected";
 
@@ -205,6 +210,39 @@ export default function CaseManagementDetailPage() {
             ))
           ) : (
             <p className="text-sm text-slate-500">No notes yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          Timeline
+        </h4>
+        <div className="mt-4 space-y-2">
+          {timelineItems.length > 0 ? (
+            timelineItems.map((item) => (
+              <article
+                key={item.id}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="text-xs font-semibold text-slate-500">
+                  {new Date(item.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <p className="mt-1 text-sm text-slate-900">{item.description}</p>
+                {item.metadata ? (
+                  <p className="mt-1 text-xs text-slate-600">
+                    {Object.entries(item.metadata)
+                      .map(([key, value]) => `${key}: ${String(value)}`)
+                      .join(" | ")}
+                  </p>
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">No timeline events yet.</p>
           )}
         </div>
       </section>

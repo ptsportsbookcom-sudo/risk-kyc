@@ -30,10 +30,8 @@ const flagOptions = [
   "Bet Velocity",
 ];
 
-const AUDIT_LOG_KEY = "audit_log_entries";
-
 export default function ManualTriggerPage() {
-  const { addCase } = useKycCases();
+  const { addAuditLog, addCase } = useKycCases();
   const { applyTriggerToPlayer } = usePlayers();
 
   const [userId, setUserId] = useState("");
@@ -116,7 +114,7 @@ export default function ManualTriggerPage() {
       flags: manualResult.finalDecision.flags,
     });
 
-    addCase({
+    const caseId = addCase({
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
@@ -130,29 +128,13 @@ export default function ManualTriggerPage() {
       createdAt: new Date().toISOString(),
       status: "Pending",
     });
-
-    const auditEntry = {
-      type: "manual_trigger",
+    addAuditLog({
+      caseId,
       userId: normalizedUserId,
-      admin: "Admin",
-      reason: reason.trim(),
-      actions: {
-        verification: manualResult.finalDecision.verification,
-        restriction: manualResult.finalDecision.restriction,
-        flags: manualResult.finalDecision.flags,
-      },
-      timestamp: new Date().toISOString(),
-    };
-    try {
-      const currentRaw = window.localStorage.getItem(AUDIT_LOG_KEY);
-      const current = currentRaw ? (JSON.parse(currentRaw) as unknown[]) : [];
-      window.localStorage.setItem(
-        AUDIT_LOG_KEY,
-        JSON.stringify([auditEntry, ...current])
-      );
-    } catch {
-      // ignore localStorage errors in prototype mode
-    }
+      type: "manual_trigger",
+      description: "Manual action applied",
+      metadata: { reason: reason.trim() },
+    });
 
     setSuccessMessage("Manual trigger resolved, audited, and one case created.");
 
