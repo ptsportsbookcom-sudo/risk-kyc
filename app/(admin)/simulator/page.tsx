@@ -2,7 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import {
-  createScenarioSimulationInputs,
+  createBulkScenarioSimulationInputs,
+  formatScenarioEvent,
+  ScenarioEvent,
+  ScenarioId,
   scenarioTemplates,
 } from "@/app/components/automation-scenarios";
 import {
@@ -38,7 +41,10 @@ type SimulationResult = {
 
 type BulkScenario = {
   id: string;
+  type: ScenarioId;
   label: string;
+  eventType: EventType;
+  events: ScenarioEvent[];
   depositAmount: number;
   deviceCount: number;
   ipCountry: string;
@@ -113,6 +119,16 @@ export default function SimulatorPage() {
   const [bulkResults, setBulkResults] = useState<BulkSimulationResult[]>([]);
   const [bulkCaseMessage, setBulkCaseMessage] = useState("");
   const [resetMessage, setResetMessage] = useState("");
+  const [numberOfScenarios, setNumberOfScenarios] = useState(10);
+  const [selectedScenarioTypes, setSelectedScenarioTypes] = useState<ScenarioId[]>(
+    scenarioTemplates.map((item) => item.id)
+  );
+
+  const toggleBulkScenarioType = (type: ScenarioId) => {
+    setSelectedScenarioTypes((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type]
+    );
+  };
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -412,12 +428,16 @@ export default function SimulatorPage() {
   };
 
   const runBulkSimulation = () => {
-    const scenarioInputs = createScenarioSimulationInputs(
-      scenarioTemplates.map((item) => item.id)
-    );
+    const scenarioInputs = createBulkScenarioSimulationInputs({
+      numberOfScenarios,
+      selectedScenarioTypes,
+    });
     const scenarios: BulkScenario[] = scenarioInputs.map((item, index) => ({
       id: `BULK-${index + 1}`,
+      type: item.type,
       label: item.label,
+      eventType: item.eventType as EventType,
+      events: item.events,
       depositAmount: item.playerData.depositAmount,
       deviceCount: item.playerData.deviceCount,
       ipCountry: item.playerData.ipCountry,
@@ -428,21 +448,12 @@ export default function SimulatorPage() {
 
     const results = scenarios.map((scenario, index) => {
       const baseScenario = scenarioInputs[index];
-      const simulationInput = {
-        eventType: baseScenario.eventType,
-        playerData: {
-          depositAmount: baseScenario.playerData.depositAmount,
-          deviceCount: baseScenario.playerData.deviceCount,
-          ipCountry: baseScenario.playerData.ipCountry,
-          accountCountry: baseScenario.playerData.accountCountry,
-          flags: baseScenario.playerData.flags,
-        },
-      };
+      const simulationInput = { eventType: baseScenario.eventType, playerData: baseScenario.playerData };
       const bulkInput = {
-        eventType: simulationInput.eventType,
+        eventType: simulationInput.eventType as EventType,
         playerData: {
           depositAmount: simulationInput.playerData.depositAmount,
-          withdrawalAmount: 0,
+          withdrawalAmount: simulationInput.playerData.withdrawalAmount,
           totalDeposits: baseScenario.playerData.totalDeposits,
           depositCount: baseScenario.playerData.depositCount,
           withdrawalCount: baseScenario.playerData.withdrawalCount,
@@ -454,7 +465,7 @@ export default function SimulatorPage() {
           ipCountry: simulationInput.playerData.ipCountry,
           accountCountry: simulationInput.playerData.accountCountry,
           deviceCount: simulationInput.playerData.deviceCount,
-          kycLevel: "L0",
+          kycLevel: simulationInput.playerData.kycLevel,
           betAmount: baseScenario.playerData.betAmount,
           odds: baseScenario.playerData.odds,
           flags: simulationInput.playerData.flags,
@@ -485,41 +496,7 @@ export default function SimulatorPage() {
       };
       console.log("Triggered rules:", evaluatedRules.triggeredRules);
 
-      const evaluatedConditions = rules
-        .filter((rule) => rule.enabled !== false)
-        .filter((rule) => rule.eventType === "ANY" || rule.eventType === simulationInput.eventType)
-        .map((rule) => {
-          const conditions =
-            rule.conditions && rule.conditions.length > 0
-              ? rule.conditions
-              : [{ field: rule.field, operator: rule.operator, value: rule.value }];
-          return {
-            ruleName: rule.name,
-            conditions: conditions.map((condition) => {
-              const leftValue =
-                condition.field === "depositAmount"
-                  ? simulationInput.playerData.depositAmount
-                  : condition.field === "deviceCount"
-                    ? simulationInput.playerData.deviceCount
-                    : condition.field === "ipCountry"
-                      ? simulationInput.playerData.ipCountry
-                      : condition.field === "accountCountry"
-                        ? simulationInput.playerData.accountCountry
-                        : condition.field === "flags"
-                          ? simulationInput.playerData.flags.join(",")
-                          : "n/a";
-              return {
-                field: condition.field,
-                operator: condition.operator,
-                expected: condition.value,
-                actual: leftValue,
-              };
-            }),
-          };
-        });
-
       console.log("[BulkSimulation] input", simulationInput);
-      console.log("[BulkSimulation] evaluated conditions", evaluatedConditions);
       console.log("[BulkSimulation] matched rules", engineResult.triggeredRules);
 
       return {
@@ -618,6 +595,41 @@ export default function SimulatorPage() {
         <p className="mt-1 text-sm text-slate-600">
           Simulate user events and evaluate KYC and restriction outcomes.
         </p>
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-semibold text-slate-900">Bulk Simulation Controls</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700">Number of scenarios</label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={numberOfScenarios}
+                onChange={(event) => setNumberOfScenarios(Number(event.target.value || 1))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-700">Scenario types</p>
+              <div className="flex flex-wrap gap-2">
+                {scenarioTemplates.map((template) => (
+                  <label
+                    key={template.id}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedScenarioTypes.includes(template.id)}
+                      onChange={() => toggleBulkScenarioType(template.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                    />
+                    {template.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
@@ -910,12 +922,25 @@ export default function SimulatorPage() {
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4"
               >
                 <p className="text-sm font-semibold text-slate-900">
-                  Scenario {item.scenario.id} ({item.scenario.label}): deposit=
+                  Scenario {item.scenario.id} ({item.scenario.type}): eventType=
+                  {item.scenario.eventType}, deposit=
                   {item.scenario.depositAmount}, deviceCount={item.scenario.deviceCount},
                   ipCountry={item.scenario.ipCountry}, accountCountry=
                   {item.scenario.accountCountry}, bonusesUsed={item.scenario.bonusesUsed},
                   betCountLastMinute={item.scenario.betCountLastMinute}
                 </p>
+                <div className="mt-2 text-sm text-slate-700">
+                  <p className="font-medium text-slate-800">Events:</p>
+                  {item.scenario.events.length > 0 ? (
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                      {item.scenario.events.map((event, eventIndex) => (
+                        <li key={`${item.scenario.id}-${eventIndex}`}>{formatScenarioEvent(event)}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1">No events</p>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-slate-700">
                   Triggered Rules:{" "}
                   {item.triggeredRules.length > 0

@@ -130,7 +130,7 @@ function formatRestrictionLabel(option: string) {
 }
 
 type BulkScenario = {
-  scenarioId: ScenarioId;
+  scenarioId: string;
   label: string;
   player: {
     depositAmount: number;

@@ -10,9 +10,11 @@ export type ScenarioId =
   | "HIGH_VELOCITY";
 
 export type ScenarioSimulationInput = {
-  id: ScenarioId;
+  id: string;
   label: string;
-  eventType: "Deposit" | "Bonus" | "Bet Placement";
+  type: ScenarioId;
+  eventType: "Deposit" | "Bonus" | "Bet Placement" | "Registration";
+  events: ScenarioEvent[];
   playerData: {
     depositAmount: number;
     withdrawalAmount: number;
@@ -34,6 +36,12 @@ export type ScenarioSimulationInput = {
   };
 };
 
+export type ScenarioEvent =
+  | { type: "login"; deviceId: number; ipCountry: string; accountCountry: string; timestamp: number }
+  | { type: "deposit"; amount: number; timestamp: number }
+  | { type: "claim_bonus"; bonusCode: string; timestamp: number }
+  | { type: "bet"; amount: number; odds: number; isLive: boolean; timestamp: number };
+
 export const scenarioTemplates: Array<{ id: ScenarioId; label: string }> = [
   { id: "MULTI_ACCOUNT", label: "MULTI_ACCOUNT" },
   { id: "HIGH_DEPOSIT", label: "HIGH_DEPOSIT" },
@@ -46,26 +54,166 @@ function randomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function createBasePlayerData() {
+function randomFrom<T>(items: T[]): T {
+  return items[randomInt(0, items.length - 1)];
+}
+
+function createBasePlayerData(accountCountry = "US") {
   const now = Date.now();
   return {
-    depositAmount: 50,
+    depositAmount: 0,
     withdrawalAmount: 0,
-    totalDeposits: 50,
-    depositCount: 1,
+    totalDeposits: 0,
+    depositCount: 0,
     withdrawalCount: 0,
     lastDepositTimestamp: now,
     lastBetTimestamp: now,
-    betCountLastMinute: 1,
+    betCountLastMinute: 0,
     bonusesUsed: 0,
-    country: "US",
-    ipCountry: "US",
-    accountCountry: "US",
+    country: accountCountry,
+    ipCountry: accountCountry,
+    accountCountry,
     deviceCount: 1,
     kycLevel: "L0",
-    betAmount: 10,
+    betAmount: 0,
     odds: 1.5,
     flags: [],
+  };
+}
+
+function buildPlayerStateFromEvents(events: ScenarioEvent[]) {
+  const accountCountryFromEvent =
+    events.find((event) => event.type === "login")?.accountCountry ?? "US";
+  const state = createBasePlayerData(accountCountryFromEvent);
+  const uniqueDevices = new Set<number>();
+  let recentBetCount = 0;
+
+  events.forEach((event) => {
+    if (event.type === "login") {
+      uniqueDevices.add(event.deviceId);
+      state.deviceCount = uniqueDevices.size;
+      state.ipCountry = event.ipCountry;
+      state.accountCountry = event.accountCountry;
+      state.country = event.accountCountry;
+      return;
+    }
+    if (event.type === "deposit") {
+      state.depositAmount = event.amount;
+      state.totalDeposits += event.amount;
+      state.depositCount += 1;
+      state.lastDepositTimestamp = event.timestamp;
+      return;
+    }
+    if (event.type === "claim_bonus") {
+      state.bonusesUsed += 1;
+      return;
+    }
+
+    recentBetCount += 1;
+    state.betAmount = event.amount;
+    state.odds = event.odds;
+    state.lastBetTimestamp = event.timestamp;
+  });
+
+  state.betCountLastMinute = recentBetCount;
+  return state;
+}
+
+function createScenarioEvents(type: ScenarioId): {
+  eventType: "Deposit" | "Bonus" | "Bet Placement" | "Registration";
+  events: ScenarioEvent[];
+} {
+  const now = Date.now();
+  const accountCountry = randomFrom(["US", "DE", "FR", "GB"]);
+  const sameIpCountry = accountCountry;
+  const mismatchIpCountry = randomFrom(["US", "DE", "FR", "GB"].filter((c) => c !== accountCountry));
+
+  if (type === "MULTI_ACCOUNT") {
+    const eventCount = randomInt(4, 6);
+    return {
+      eventType: "Registration",
+      events: Array.from({ length: eventCount }, (_, index) => ({
+        type: "login" as const,
+        deviceId: index + 1,
+        ipCountry: sameIpCountry,
+        accountCountry,
+        timestamp: now + index * 10_000,
+      })),
+    };
+  }
+
+  if (type === "HIGH_DEPOSIT") {
+    return {
+      eventType: "Deposit",
+      events: [
+        {
+          type: "deposit",
+          amount: randomInt(1100, 3000),
+          timestamp: now,
+        },
+      ],
+    };
+  }
+
+  if (type === "COUNTRY_MISMATCH") {
+    return {
+      eventType: "Registration",
+      events: [
+        {
+          type: "login",
+          deviceId: randomInt(1, 3),
+          ipCountry: mismatchIpCountry,
+          accountCountry,
+          timestamp: now,
+        },
+      ],
+    };
+  }
+
+  if (type === "BONUS_ABUSE") {
+    const bonusClaims = randomInt(2, 5);
+    const bonusEvents: ScenarioEvent[] = Array.from({ length: bonusClaims }, (_, index) => ({
+      type: "claim_bonus",
+      bonusCode: `WELCOME-${index + 1}`,
+      timestamp: now + index * 5_000,
+    }));
+    return {
+      eventType: "Bonus",
+      events: [
+        ...bonusEvents,
+        {
+          type: "deposit",
+          amount: randomInt(100, 900),
+          timestamp: now + (bonusClaims + 1) * 5_000,
+        },
+      ],
+    };
+  }
+
+  const betEvents = randomInt(12, 25);
+  return {
+    eventType: "Bet Placement",
+    events: Array.from({ length: betEvents }, (_, index) => ({
+      type: "bet",
+      amount: randomInt(5, 120),
+      odds: Number((Math.random() * 3 + 1).toFixed(2)),
+      isLive: Math.random() > 0.5,
+      timestamp: now - randomInt(0, 59_000) + index * 500,
+    })),
+  };
+}
+
+function buildScenarioFromType(type: ScenarioId, id: string, label: string): ScenarioSimulationInput {
+  const generated = createScenarioEvents(type);
+  const playerData = buildPlayerStateFromEvents(generated.events);
+
+  return {
+    id,
+    type,
+    label,
+    eventType: generated.eventType,
+    events: generated.events,
+    playerData,
   };
 }
 
@@ -194,68 +342,36 @@ export function createAutoRulesFromScenarios(selectedScenarioIds: ScenarioId[]):
 export function createScenarioSimulationInputs(
   selectedScenarioIds: ScenarioId[]
 ): ScenarioSimulationInput[] {
-  return selectedScenarioIds.map((id) => {
-    const base = createBasePlayerData();
-    if (id === "MULTI_ACCOUNT") {
-      return {
-        id,
-        label: "MULTI_ACCOUNT",
-        eventType: "Deposit",
-        playerData: {
-          ...base,
-          deviceCount: randomInt(4, 6),
-          depositAmount: randomInt(100, 400),
-          totalDeposits: randomInt(100, 400),
-        },
-      };
-    }
-    if (id === "HIGH_DEPOSIT") {
-      const deposit = randomInt(1200, 2000);
-      return {
-        id,
-        label: "HIGH_DEPOSIT",
-        eventType: "Deposit",
-        playerData: {
-          ...base,
-          depositAmount: deposit,
-          totalDeposits: deposit,
-        },
-      };
-    }
-    if (id === "COUNTRY_MISMATCH") {
-      const accountCountry = "US";
-      const ipCountry = "UK";
-      return {
-        id,
-        label: "COUNTRY_MISMATCH",
-        eventType: "Deposit",
-        playerData: {
-          ...base,
-          accountCountry,
-          ipCountry,
-        },
-      };
-    }
-    if (id === "BONUS_ABUSE") {
-      return {
-        id,
-        label: "BONUS_ABUSE",
-        eventType: "Bonus",
-        playerData: {
-          ...base,
-          bonusesUsed: randomInt(3, 5),
-        },
-      };
-    }
-    return {
-      id,
-      label: "HIGH_VELOCITY",
-      eventType: "Bet Placement",
-      playerData: {
-        ...base,
-        betCountLastMinute: randomInt(20, 30),
-      },
-    };
+  return selectedScenarioIds.map((id) => buildScenarioFromType(id, id, id));
+}
+
+export function createBulkScenarioSimulationInputs(input: {
+  numberOfScenarios: number;
+  selectedScenarioTypes: ScenarioId[];
+}): ScenarioSimulationInput[] {
+  const { numberOfScenarios, selectedScenarioTypes } = input;
+  const validTypes =
+    selectedScenarioTypes.length > 0
+      ? selectedScenarioTypes
+      : scenarioTemplates.map((item) => item.id);
+
+  return Array.from({ length: Math.max(1, numberOfScenarios) }, (_, index) => {
+    const type = randomFrom(validTypes);
+    const scenarioId = `BULK-${index + 1}`;
+    return buildScenarioFromType(type, scenarioId, type);
   });
+}
+
+export function formatScenarioEvent(event: ScenarioEvent): string {
+  if (event.type === "login") {
+    return `login (device ${event.deviceId}, ip ${event.ipCountry}, account ${event.accountCountry})`;
+  }
+  if (event.type === "deposit") {
+    return `deposit (${event.amount})`;
+  }
+  if (event.type === "claim_bonus") {
+    return `claim_bonus (${event.bonusCode})`;
+  }
+  return `bet (amount ${event.amount}, odds ${event.odds}, live ${event.isLive ? "yes" : "no"})`;
 }
 
