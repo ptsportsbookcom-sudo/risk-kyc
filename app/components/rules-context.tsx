@@ -107,6 +107,7 @@ type CreateRuleInput = Omit<Rule, "id">;
 type RulesContextValue = {
   rules: Rule[];
   addRule: (input: CreateRuleInput) => void;
+  resetRules: () => void;
 };
 
 const RulesContext = createContext<RulesContextValue | undefined>(undefined);
@@ -139,7 +140,11 @@ export function RulesProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
-  const value = useMemo(() => ({ rules, addRule }), [rules]);
+  const resetRules = () => {
+    setRules([]);
+  };
+
+  const value = useMemo(() => ({ rules, addRule, resetRules }), [rules]);
 
   return <RulesContext.Provider value={value}>{children}</RulesContext.Provider>;
 }

@@ -77,6 +77,7 @@ type PlayersContextValue = {
   }) => Player;
   clearExpiredSelfExclusion: (id: string) => Player | undefined;
   getPlayerById: (id: string) => Player | undefined;
+  resetPlayers: () => void;
 };
 
 const PLAYERS_STORAGE_KEY = "kyc_players";
@@ -345,6 +346,12 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
   };
 
   const getPlayerById = (id: string) => players.find((player) => player.id === id);
+  const resetPlayers = () => {
+    setPlayers([]);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(PLAYERS_STORAGE_KEY);
+    }
+  };
 
   return (
     <PlayersContext.Provider
@@ -354,6 +361,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
         applySelfExclusion,
         clearExpiredSelfExclusion,
         getPlayerById,
+        resetPlayers,
       }}
     >
       {children}

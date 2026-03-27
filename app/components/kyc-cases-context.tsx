@@ -91,6 +91,7 @@ type KycCasesContextValue = {
     type: DocumentType,
     status: ReviewStatus
   ) => void;
+  resetCasesData: () => void;
 };
 
 const KycCasesContext = createContext<KycCasesContextValue | undefined>(undefined);
@@ -352,6 +353,15 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const resetCasesData = () => {
+    setCases([]);
+    setAuditLogs([]);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(KYC_CASES_STORAGE_KEY);
+      window.localStorage.removeItem(KYC_AUDIT_LOGS_STORAGE_KEY);
+    }
+  };
+
   const value = {
     cases,
     auditLogs,
@@ -361,6 +371,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
     addAuditLog,
     uploadDocument,
     updateDocumentStatus,
+    resetCasesData,
   };
 
   return (

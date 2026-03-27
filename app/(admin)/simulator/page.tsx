@@ -70,13 +70,14 @@ const initialResult: SimulationResult = {
 };
 
 export default function SimulatorPage() {
-  const { rules } = useRules();
-  const { addAuditLog, addCase } = useKycCases();
+  const { rules, resetRules } = useRules();
+  const { addAuditLog, addCase, resetCasesData } = useKycCases();
   const {
     applyTriggerToPlayer,
     applySelfExclusion,
     clearExpiredSelfExclusion,
     getPlayerById,
+    resetPlayers,
   } = usePlayers();
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
@@ -103,6 +104,7 @@ export default function SimulatorPage() {
   const [activePlayerId, setActivePlayerId] = useState("");
   const [bulkResults, setBulkResults] = useState<BulkSimulationResult[]>([]);
   const [bulkCaseMessage, setBulkCaseMessage] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -538,6 +540,32 @@ export default function SimulatorPage() {
     setBulkCaseMessage(`${createdCount} case(s) created from bulk results.`);
   };
 
+  const resetSimulationsOnly = () => {
+    setResult(initialResult);
+    setBulkResults([]);
+    setBulkCaseMessage("");
+    setActionCheckResult("");
+    setActivePlayerId("");
+    setResetMessage("Simulations reset successfully");
+  };
+
+  const resetAllData = () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to reset all data? This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    resetRules();
+    resetCasesData();
+    resetPlayers();
+    setResult(initialResult);
+    setBulkResults([]);
+    setBulkCaseMessage("");
+    setActionCheckResult("");
+    setActivePlayerId("");
+    setResetMessage("System reset successfully");
+  };
+
   return (
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -545,7 +573,7 @@ export default function SimulatorPage() {
         <p className="mt-1 text-sm text-slate-600">
           Simulate user events and evaluate KYC and restriction outcomes.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             onClick={runBulkSimulation}
@@ -553,7 +581,24 @@ export default function SimulatorPage() {
           >
             Run Bulk Simulation
           </button>
+          <button
+            type="button"
+            onClick={resetSimulationsOnly}
+            className="min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100 sm:w-auto"
+          >
+            Reset Simulations Only
+          </button>
+          <button
+            type="button"
+            onClick={resetAllData}
+            className="min-h-11 w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 sm:w-auto"
+          >
+            Reset All Data
+          </button>
         </div>
+        {resetMessage ? (
+          <p className="mt-2 text-sm font-medium text-emerald-700">{resetMessage}</p>
+        ) : null}
 
         <form className="mt-5 space-y-4" onSubmit={runSimulation}>
           <div className="grid gap-4 md:grid-cols-2">
