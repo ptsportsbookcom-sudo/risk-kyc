@@ -87,7 +87,7 @@ export default function ManualTriggerPage() {
         lastBetTimestamp: now,
         betAmount: normalizedBetAmount,
         odds: normalizedOdds,
-        flags: actionType === "Flag" ? flags : [],
+        flags: flags,
       },
     };
   };
@@ -182,7 +182,7 @@ export default function ManualTriggerPage() {
       restrictions: finalRestrictions,
       flags: finalFlags,
       triggeredRules: result.triggeredRules || [],
-      fraudFlags,
+      fraudFlags: fraudFlags,
       riskScore,
       finalDecision: result.finalDecision,
       source: "manual",
