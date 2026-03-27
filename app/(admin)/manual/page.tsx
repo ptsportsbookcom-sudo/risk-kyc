@@ -130,9 +130,33 @@ export default function ManualTriggerPage() {
 
     const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
-    const unifiedInput = buildUnifiedInput(Date.now());
+    const input = {
+      Transaction: {
+        depositAmount: 100,
+        withdrawalAmount: 50,
+        totalDeposits: 500,
+        depositCount: 3,
+        withdrawalCount: 1,
+      },
+      Player: {
+        deviceCount: 4,
+        ipCountry: "DE",
+        accountCountry: "GB",
+        country: "GB",
+        kycLevel: "L0",
+      },
+      Behavior: {
+        bonusesUsed: 2,
+        betCountLastMinute: 12,
+        lastDepositTimestamp: Date.now(),
+        lastBetTimestamp: Date.now(),
+        betAmount: 50,
+        odds: 2.5,
+        flags: [],
+      },
+    };
     const result = runRiskEngine({
-      input: unifiedInput,
+      input,
       rules,
     });
     const finalVerifications = result.aggregatedActions.verifications as VerificationType[];
@@ -145,16 +169,16 @@ export default function ManualTriggerPage() {
       restrictions: finalRestrictions,
       flags: result.flags,
       playerSnapshot: {
-        deviceCount: unifiedInput.Player.deviceCount,
-        ipCountry: unifiedInput.Player.ipCountry,
-        accountCountry: unifiedInput.Player.accountCountry,
-        totalDeposits: unifiedInput.Transaction.totalDeposits,
-        depositCount: unifiedInput.Transaction.depositCount,
-        withdrawalCount: unifiedInput.Transaction.withdrawalCount,
-        lastDepositTimestamp: unifiedInput.Behavior.lastDepositTimestamp,
-        lastBetTimestamp: unifiedInput.Behavior.lastBetTimestamp,
-        betCountLastMinute: unifiedInput.Behavior.betCountLastMinute,
-        bonusesUsed: unifiedInput.Behavior.bonusesUsed,
+        deviceCount: input.Player.deviceCount,
+        ipCountry: input.Player.ipCountry,
+        accountCountry: input.Player.accountCountry,
+        totalDeposits: input.Transaction.totalDeposits,
+        depositCount: input.Transaction.depositCount,
+        withdrawalCount: input.Transaction.withdrawalCount,
+        lastDepositTimestamp: input.Behavior.lastDepositTimestamp,
+        lastBetTimestamp: input.Behavior.lastBetTimestamp,
+        betCountLastMinute: input.Behavior.betCountLastMinute,
+        bonusesUsed: input.Behavior.bonusesUsed,
       },
     });
 
