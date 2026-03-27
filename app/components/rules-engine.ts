@@ -5,25 +5,30 @@ import { getFraudSignals } from "@/app/components/fraud-signals";
 import { getKycLevel } from "@/app/components/kyc-levels";
 
 export type RulesEngineInput = {
-  eventType: string;
-  playerData: {
-    depositAmount: number;
-    withdrawalAmount: number;
-    totalDeposits: number;
-    depositCount: number;
-    withdrawalCount: number;
-    lastDepositTimestamp: number;
-    lastBetTimestamp: number;
-    betCountLastMinute: number;
-    bonusesUsed: number;
-    country: string;
-    ipCountry: string;
-    accountCountry: string;
-    deviceCount: number;
-    kycLevel: string;
-    betAmount: number;
-    odds: number;
-    flags?: string[];
+  input: {
+    Transaction: {
+      depositAmount: number;
+      withdrawalAmount: number;
+      totalDeposits: number;
+      depositCount: number;
+      withdrawalCount: number;
+    };
+    Player: {
+      deviceCount: number;
+      ipCountry: string;
+      accountCountry: string;
+      country: string;
+      kycLevel: string;
+    };
+    Behavior: {
+      bonusesUsed: number;
+      betCountLastMinute: number;
+      lastDepositTimestamp: number;
+      lastBetTimestamp: number;
+      betAmount: number;
+      odds: number;
+      flags?: string[];
+    };
   };
   rules: Rule[];
 };
@@ -67,6 +72,8 @@ export type EvaluateRulesResult = {
     flags: string[];
   };
 };
+
+export type UnifiedRiskInput = RulesEngineInput["input"];
 
 const verificationPriority: Record<string, number> = {
   ID: 1,
@@ -149,7 +156,7 @@ function evaluateOperator(
 
 function evaluateCondition(
   condition: { field: string; operator: string; value: string },
-  playerData: RulesEngineInput["playerData"]
+  playerData: ReturnType<typeof flattenUnifiedInput>
 ) {
   const valueByField: Record<string, number | string> = {
     depositAmount: playerData.depositAmount,
@@ -182,7 +189,7 @@ function evaluateCondition(
   return evaluateOperator(left, condition.operator, condition.value, valueByField);
 }
 
-function doesRuleMatch(rule: Rule, playerData: RulesEngineInput["playerData"]) {
+function doesRuleMatch(rule: Rule, playerData: ReturnType<typeof flattenUnifiedInput>) {
   const normalizedConditions =
     rule.conditions && rule.conditions.length > 0
       ? rule.conditions
@@ -193,6 +200,28 @@ function doesRuleMatch(rule: Rule, playerData: RulesEngineInput["playerData"]) {
   return logic === "ANY"
     ? normalizedConditions.some((condition) => evaluateCondition(condition, playerData))
     : normalizedConditions.every((condition) => evaluateCondition(condition, playerData));
+}
+
+function flattenUnifiedInput(input: UnifiedRiskInput) {
+  return {
+    depositAmount: input.Transaction.depositAmount,
+    withdrawalAmount: input.Transaction.withdrawalAmount,
+    totalDeposits: input.Transaction.totalDeposits,
+    depositCount: input.Transaction.depositCount,
+    withdrawalCount: input.Transaction.withdrawalCount,
+    lastDepositTimestamp: input.Behavior.lastDepositTimestamp,
+    lastBetTimestamp: input.Behavior.lastBetTimestamp,
+    betCountLastMinute: input.Behavior.betCountLastMinute,
+    bonusesUsed: input.Behavior.bonusesUsed,
+    country: input.Player.country,
+    ipCountry: input.Player.ipCountry,
+    accountCountry: input.Player.accountCountry,
+    deviceCount: input.Player.deviceCount,
+    kycLevel: input.Player.kycLevel,
+    betAmount: input.Behavior.betAmount,
+    odds: input.Behavior.odds,
+    flags: input.Behavior.flags ?? [],
+  };
 }
 
 function getEmptyResult(): RulesEngineResult {
@@ -223,12 +252,12 @@ function getEmptyResult(): RulesEngineResult {
 }
 
 export function evaluateRules(
-  input: Pick<RulesEngineInput, "eventType" | "playerData">,
+  input: UnifiedRiskInput,
   rules: Rule[]
 ): EvaluateRulesResult {
+  const normalizedInput = flattenUnifiedInput(input);
   const eligibleRules = rules
     .filter((rule) => rule.enabled !== false)
-    .filter((rule) => rule.eventType === "ANY" || rule.eventType === input.eventType)
     .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100));
 
   const verificationSet = new Set<string>();
@@ -237,7 +266,7 @@ export function evaluateRules(
   const triggeredRules: EvaluateRulesResult["triggeredRules"] = [];
 
   for (const rule of eligibleRules) {
-    if (!doesRuleMatch(rule, input.playerData)) continue;
+    if (!doesRuleMatch(rule, normalizedInput)) continue;
 
     triggeredRules.push({
       id: rule.id,
@@ -296,87 +325,58 @@ export function resolveDecision(input: {
   };
 }
 
-export function runRulesEngine({
-  eventType,
-  playerData,
-  rules,
-}: RulesEngineInput): RulesEngineResult {
+export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] }) {
+  const normalizedInput = flattenUnifiedInput(input.input);
   const detectedFraudSignals = getFraudSignals({
-    deviceCount: playerData.deviceCount,
-    ipCountry: playerData.ipCountry,
-    accountCountry: playerData.accountCountry,
-    totalDeposits: playerData.totalDeposits,
-    depositCount: playerData.depositCount,
-    withdrawalCount: playerData.withdrawalCount,
-    lastDepositTimestamp: playerData.lastDepositTimestamp,
-    lastBetTimestamp: playerData.lastBetTimestamp,
-    betCountLastMinute: playerData.betCountLastMinute,
-    bonusesUsed: playerData.bonusesUsed,
+    deviceCount: normalizedInput.deviceCount,
+    ipCountry: normalizedInput.ipCountry,
+    accountCountry: normalizedInput.accountCountry,
+    totalDeposits: normalizedInput.totalDeposits,
+    depositCount: normalizedInput.depositCount,
+    withdrawalCount: normalizedInput.withdrawalCount,
+    lastDepositTimestamp: normalizedInput.lastDepositTimestamp,
+    lastBetTimestamp: normalizedInput.lastBetTimestamp,
+    betCountLastMinute: normalizedInput.betCountLastMinute,
+    bonusesUsed: normalizedInput.bonusesUsed,
   }).flags;
 
-  const playerDataWithSignals = {
-    ...playerData,
-    flags: Array.from(new Set([...(playerData.flags ?? []), ...detectedFraudSignals])),
-  };
-
-  if (!Array.isArray(rules) || rules.length === 0) {
-    const empty = getEmptyResult();
-    const resolved = resolveAggregatedActions({
-      verifications: [],
-      restrictions: [],
-      flags: detectedFraudSignals,
-    });
-    return {
-      ...empty,
-      flags: resolved.flags,
-      aggregatedActions: resolved.aggregatedActions,
-      finalDecision: {
-        ...empty.finalDecision,
-        flags: resolved.flags,
-        aggregatedActions: resolved.aggregatedActions,
-      },
-      detectedFraudSignals,
-    };
-  }
-
-  const evaluated = evaluateRules(
-    { eventType, playerData: playerDataWithSignals },
-    rules
-  );
-
-  if (evaluated.triggeredRules.length === 0) {
-    const empty = getEmptyResult();
-    const resolved = resolveDecision({
-      triggeredRules: [],
-      ruleActions: {
-        verifications: [],
-        restrictions: [],
-        flags: [],
-      },
-      fraudSignals: detectedFraudSignals,
-    });
-    return {
-      ...empty,
-      flags: resolved.finalDecision.flags,
-      aggregatedActions: resolved.aggregatedActions,
-      finalDecision: resolved.finalDecision,
-      detectedFraudSignals,
-    };
-  }
+  const evaluated = evaluateRules(input.input, input.rules);
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
     ruleActions: evaluated.ruleActions,
     fraudSignals: detectedFraudSignals,
   });
 
-  return {
+  const result = {
     triggeredRules: evaluated.triggeredRules,
-    verificationRequired: resolved.aggregatedActions.verifications,
-    restrictions: resolved.aggregatedActions.restrictions,
-    flags: resolved.aggregatedActions.flags,
+    flags: resolved.finalDecision.flags,
+    finalVerification: resolved.finalDecision.verification,
+    finalRestriction: resolved.finalDecision.restriction,
+    finalKycLevel: resolved.finalDecision.kycLevel,
     aggregatedActions: resolved.aggregatedActions,
     finalDecision: resolved.finalDecision,
     detectedFraudSignals,
+  };
+
+  console.log("INPUT:", input.input);
+  console.log("TRIGGERED RULES:", result.triggeredRules);
+  console.log("FINAL DECISION:", result);
+
+  return result;
+}
+
+export function runRulesEngine({ input, rules }: RulesEngineInput): RulesEngineResult {
+  const empty = getEmptyResult();
+  const result = runRiskEngine({ input, rules });
+  return {
+    ...empty,
+    triggeredRules: result.triggeredRules,
+    verificationRequired: result.aggregatedActions.verifications,
+    restrictions: result.aggregatedActions.restrictions,
+    flags: result.flags,
+    aggregatedActions: result.aggregatedActions,
+    finalDecision: result.finalDecision,
+    detectedFraudSignals: result.detectedFraudSignals,
   };
 }
 

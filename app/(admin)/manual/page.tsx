@@ -5,9 +5,9 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
-import { resolveAggregatedActions } from "@/app/components/rules-engine";
+import { runRiskEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
-import { RestrictionType } from "@/app/components/rules-context";
+import { RestrictionType, Rule, useRules } from "@/app/components/rules-context";
 
 const verificationOptions: VerificationType[] = [
   "ID",
@@ -31,6 +31,7 @@ const flagOptions = [
 ];
 
 export default function ManualTriggerPage() {
+  const { rules } = useRules();
   const { addAuditLog, addCase } = useKycCases();
   const { applyTriggerToPlayer } = usePlayers();
 
@@ -50,21 +51,54 @@ export default function ManualTriggerPage() {
     restrictions: actionType === "Restriction" ? restrictions : [],
     flags: actionType === "Flag" ? flags : [],
   };
-
-  // Keep manual trigger output aligned with rule engine structure.
-  const resolvedPreview = resolveAggregatedActions(manualActionObject);
-  const manualResult = {
-    triggeredRules: [] as Array<{ id: string; name: string; priority: number }>,
-    aggregatedActions: resolvedPreview.aggregatedActions,
-    finalDecision: {
-      verification: resolvedPreview.verification,
-      kycLevel: resolvedPreview.kycLevel,
-      restriction: resolvedPreview.restriction,
-      flags: resolvedPreview.flags,
-      triggeredRules: [] as Array<{ id: string; name: string; priority: number }>,
-      aggregatedActions: resolvedPreview.aggregatedActions,
-    },
+  const manualRuntimeRule: Rule = {
+    id: "manual-runtime",
+    name: "Manual Trigger Runtime Rule",
+    source: "manual",
+    eventType: "ANY",
+    conditions: [{ category: "Transaction", field: "depositAmount", operator: ">=", value: "0" }],
+    conditionLogic: "ALL",
+    conditionGroups: [],
+    groupLogic: "ALL",
+    field: "depositAmount",
+    operator: ">=",
+    value: "0",
+    actions: manualActionObject,
+    priority: 0,
+    enabled: true,
+    stopProcessing: true,
+    verificationRequired: manualActionObject.verifications,
+    restrictions: manualActionObject.restrictions,
+    flags: manualActionObject.flags,
   };
+  const manualResult = runRiskEngine({
+    input: {
+      Transaction: {
+        depositAmount: 0,
+        withdrawalAmount: 0,
+        totalDeposits: 0,
+        depositCount: 0,
+        withdrawalCount: 0,
+      },
+      Player: {
+        deviceCount: 1,
+        ipCountry: "US",
+        accountCountry: "US",
+        country: "US",
+        kycLevel: "L0",
+      },
+      Behavior: {
+        bonusesUsed: 0,
+        betCountLastMinute: 0,
+        lastDepositTimestamp: 0,
+        lastBetTimestamp: 0,
+        betAmount: 0,
+        odds: 1,
+        flags: [],
+      },
+    },
+    rules: [...rules, manualRuntimeRule],
+  });
 
   const toggleVerification = (value: VerificationType) => {
     setVerificationRequired((current) =>

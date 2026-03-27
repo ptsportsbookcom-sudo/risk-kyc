@@ -8,7 +8,7 @@ import {
   scenarioTemplates,
 } from "@/app/components/automation-scenarios";
 import { VerificationType } from "@/app/components/kyc-cases-context";
-import { runRulesEngine } from "@/app/components/rules-engine";
+import { runRiskEngine } from "@/app/components/rules-engine";
 import {
   EventType,
   RuleConditionCategory,
@@ -348,9 +348,32 @@ export default function RulesPage() {
     if (selectedScenarioIds.length === 0) return;
     const scenarios = createScenarioSimulationInputs(selectedScenarioIds);
     const results = scenarios.map((scenario) => {
-      const engineResult = runRulesEngine({
-        eventType: scenario.eventType,
-        playerData: scenario.playerData,
+      const engineResult = runRiskEngine({
+        input: {
+          Transaction: {
+            depositAmount: scenario.playerData.depositAmount,
+            withdrawalAmount: scenario.playerData.withdrawalAmount,
+            totalDeposits: scenario.playerData.totalDeposits,
+            depositCount: scenario.playerData.depositCount,
+            withdrawalCount: scenario.playerData.withdrawalCount,
+          },
+          Player: {
+            deviceCount: scenario.playerData.deviceCount,
+            ipCountry: scenario.playerData.ipCountry,
+            accountCountry: scenario.playerData.accountCountry,
+            country: scenario.playerData.country,
+            kycLevel: scenario.playerData.kycLevel,
+          },
+          Behavior: {
+            bonusesUsed: scenario.playerData.bonusesUsed,
+            betCountLastMinute: scenario.playerData.betCountLastMinute,
+            lastDepositTimestamp: scenario.playerData.lastDepositTimestamp,
+            lastBetTimestamp: scenario.playerData.lastBetTimestamp,
+            betAmount: scenario.playerData.betAmount,
+            odds: scenario.playerData.odds,
+            flags: scenario.playerData.flags,
+          },
+        },
         rules,
       });
 
