@@ -59,6 +59,15 @@ export type AggregatedActionsInput = {
   flags: string[];
 };
 
+export type EvaluateRulesResult = {
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  ruleActions: {
+    verifications: string[];
+    restrictions: string[];
+    flags: string[];
+  };
+};
+
 const verificationPriority: Record<string, number> = {
   ID: 1,
   Selfie: 2,
@@ -202,6 +211,80 @@ function getEmptyResult(): RulesEngineResult {
   };
 }
 
+export function evaluateRules(
+  input: Pick<RulesEngineInput, "eventType" | "playerData">,
+  rules: Rule[]
+): EvaluateRulesResult {
+  const eligibleRules = rules
+    .filter((rule) => rule.enabled !== false)
+    .filter((rule) => rule.eventType === "ANY" || rule.eventType === input.eventType)
+    .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100));
+
+  const verificationSet = new Set<string>();
+  const restrictionSet = new Set<string>();
+  const flagSet = new Set<string>();
+  const triggeredRules: EvaluateRulesResult["triggeredRules"] = [];
+
+  for (const rule of eligibleRules) {
+    if (!doesRuleMatch(rule, input.playerData)) continue;
+
+    triggeredRules.push({
+      id: rule.id,
+      name: rule.name || "Untitled Rule",
+      priority: rule.priority ?? 100,
+    });
+
+    const actions = rule.actions ?? {
+      verifications: rule.verificationRequired ?? [],
+      restrictions: rule.restrictions ?? [],
+      flags: rule.flags ?? [],
+    };
+    actions.verifications.forEach((item) => verificationSet.add(item));
+    actions.restrictions.forEach((item) => restrictionSet.add(item));
+    actions.flags.forEach((item) => flagSet.add(item));
+
+    if (rule.stopProcessing) break;
+  }
+
+  return {
+    triggeredRules,
+    ruleActions: {
+      verifications: Array.from(verificationSet),
+      restrictions: Array.from(restrictionSet),
+      flags: Array.from(flagSet),
+    },
+  };
+}
+
+export function resolveDecision(input: {
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  ruleActions: {
+    verifications: string[];
+    restrictions: string[];
+    flags: string[];
+  };
+  fraudSignals: string[];
+}) {
+  const aggregatedActions = {
+    verifications: input.ruleActions.verifications,
+    restrictions: input.ruleActions.restrictions,
+    flags: Array.from(new Set([...input.ruleActions.flags, ...input.fraudSignals])),
+  };
+  const resolved = resolveAggregatedActions(aggregatedActions);
+
+  return {
+    aggregatedActions,
+    finalDecision: {
+      verification: resolved.verification,
+      kycLevel: resolved.kycLevel,
+      restriction: resolved.restriction,
+      flags: resolved.flags,
+      triggeredRules: input.triggeredRules,
+      aggregatedActions: resolved.aggregatedActions,
+    },
+  };
+}
+
 export function runRulesEngine({
   eventType,
   playerData,
@@ -245,81 +328,43 @@ export function runRulesEngine({
     };
   }
 
-  const eligibleRules = rules
-    .filter((rule) => rule.enabled !== false)
-    .filter((rule) => rule.eventType === "ANY" || rule.eventType === eventType)
-    .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100));
+  const evaluated = evaluateRules(
+    { eventType, playerData: playerDataWithSignals },
+    rules
+  );
 
-  if (eligibleRules.length === 0) {
+  if (evaluated.triggeredRules.length === 0) {
     const empty = getEmptyResult();
-    const resolved = resolveAggregatedActions({
-      verifications: [],
-      restrictions: [],
-      flags: detectedFraudSignals,
+    const resolved = resolveDecision({
+      triggeredRules: [],
+      ruleActions: {
+        verifications: [],
+        restrictions: [],
+        flags: [],
+      },
+      fraudSignals: detectedFraudSignals,
     });
     return {
       ...empty,
-      flags: resolved.flags,
+      flags: resolved.finalDecision.flags,
       aggregatedActions: resolved.aggregatedActions,
-      finalDecision: {
-        ...empty.finalDecision,
-        flags: resolved.flags,
-        aggregatedActions: resolved.aggregatedActions,
-      },
+      finalDecision: resolved.finalDecision,
       detectedFraudSignals,
     };
   }
-
-  const verificationSet = new Set<string>();
-  const restrictionSet = new Set<string>();
-  const flagSet = new Set<string>();
-  const triggeredRules: RulesEngineResult["triggeredRules"] = [];
-
-  for (const rule of eligibleRules) {
-    if (!doesRuleMatch(rule, playerDataWithSignals)) continue;
-
-    triggeredRules.push({
-      id: rule.id,
-      name: rule.name || "Untitled Rule",
-      priority: rule.priority ?? 100,
-    });
-
-    const actions = rule.actions ?? {
-      verifications: rule.verificationRequired ?? [],
-      restrictions: rule.restrictions ?? [],
-      flags: rule.flags ?? [],
-    };
-
-    actions.verifications.forEach((item) => verificationSet.add(item));
-    actions.restrictions.forEach((item) => restrictionSet.add(item));
-    actions.flags.forEach((item) => flagSet.add(item));
-
-    if (rule.stopProcessing) break;
-  }
-
-  const aggregatedActions = {
-    verifications: Array.from(verificationSet),
-    restrictions: Array.from(restrictionSet),
-    flags: Array.from(new Set([...flagSet, ...detectedFraudSignals])),
-  };
-
-  const resolved = resolveAggregatedActions(aggregatedActions);
-  const finalDecision = {
-    verification: resolved.verification,
-    kycLevel: resolved.kycLevel,
-    restriction: resolved.restriction,
-    flags: resolved.flags,
-    triggeredRules,
-    aggregatedActions: resolved.aggregatedActions,
-  };
+  const resolved = resolveDecision({
+    triggeredRules: evaluated.triggeredRules,
+    ruleActions: evaluated.ruleActions,
+    fraudSignals: detectedFraudSignals,
+  });
 
   return {
-    triggeredRules,
-    verificationRequired: aggregatedActions.verifications,
-    restrictions: aggregatedActions.restrictions,
-    flags: aggregatedActions.flags,
-    aggregatedActions,
-    finalDecision,
+    triggeredRules: evaluated.triggeredRules,
+    verificationRequired: resolved.aggregatedActions.verifications,
+    restrictions: resolved.aggregatedActions.restrictions,
+    flags: resolved.aggregatedActions.flags,
+    aggregatedActions: resolved.aggregatedActions,
+    finalDecision: resolved.finalDecision,
     detectedFraudSignals,
   };
 }

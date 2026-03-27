@@ -6,7 +6,8 @@ import {
   VerificationType,
 } from "@/app/components/kyc-cases-context";
 import { canUserPerformAction } from "@/app/components/enforcement";
-import { runRulesEngine } from "@/app/components/rules-engine";
+import { getFraudSignals } from "@/app/components/fraud-signals";
+import { evaluateRules, resolveDecision } from "@/app/components/rules-engine";
 import {
   SelfExclusionDuration,
   usePlayers,
@@ -136,7 +137,7 @@ export default function SimulatorPage() {
       bonusesUsed: Number(bonusesUsed || 0),
     };
 
-    const engineResult = runRulesEngine({
+    const simulationInput = {
       eventType,
       playerData: {
         depositAmount: simulation.depositAmount,
@@ -157,8 +158,32 @@ export default function SimulatorPage() {
         odds: simulation.odds,
         flags: existingPlayer?.flags ?? [],
       },
-      rules,
+    };
+    const evaluatedRules = evaluateRules(simulationInput, rules);
+    const fraudSignals = getFraudSignals({
+      deviceCount: simulationInput.playerData.deviceCount,
+      ipCountry: simulationInput.playerData.ipCountry,
+      accountCountry: simulationInput.playerData.accountCountry,
+      totalDeposits: simulationInput.playerData.totalDeposits,
+      depositCount: simulationInput.playerData.depositCount,
+      withdrawalCount: simulationInput.playerData.withdrawalCount,
+      lastDepositTimestamp: simulationInput.playerData.lastDepositTimestamp,
+      lastBetTimestamp: simulationInput.playerData.lastBetTimestamp,
+      betCountLastMinute: simulationInput.playerData.betCountLastMinute,
+      bonusesUsed: simulationInput.playerData.bonusesUsed,
+    }).flags;
+    const resolvedEngine = resolveDecision({
+      triggeredRules: evaluatedRules.triggeredRules,
+      ruleActions: evaluatedRules.ruleActions,
+      fraudSignals,
     });
+    const engineResult = {
+      triggeredRules: evaluatedRules.triggeredRules,
+      aggregatedActions: resolvedEngine.aggregatedActions,
+      finalDecision: resolvedEngine.finalDecision,
+      detectedFraudSignals: fraudSignals,
+    };
+    console.log("Triggered rules:", evaluatedRules.triggeredRules);
 
     if (engineResult.triggeredRules.length === 0) {
       setResult({
@@ -422,7 +447,7 @@ export default function SimulatorPage() {
           flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
         },
       };
-      const engineResult = runRulesEngine({
+      const bulkInput = {
         eventType: simulationInput.eventType,
         playerData: {
           depositAmount: simulationInput.playerData.depositAmount,
@@ -443,8 +468,31 @@ export default function SimulatorPage() {
           odds: 0,
           flags: simulationInput.playerData.flags,
         },
-        rules,
+      };
+      const evaluatedRules = evaluateRules(bulkInput, rules);
+      const fraudSignals = getFraudSignals({
+        deviceCount: bulkInput.playerData.deviceCount,
+        ipCountry: bulkInput.playerData.ipCountry,
+        accountCountry: bulkInput.playerData.accountCountry,
+        totalDeposits: bulkInput.playerData.totalDeposits,
+        depositCount: bulkInput.playerData.depositCount,
+        withdrawalCount: bulkInput.playerData.withdrawalCount,
+        lastDepositTimestamp: bulkInput.playerData.lastDepositTimestamp,
+        lastBetTimestamp: bulkInput.playerData.lastBetTimestamp,
+        betCountLastMinute: bulkInput.playerData.betCountLastMinute,
+        bonusesUsed: bulkInput.playerData.bonusesUsed,
+      }).flags;
+      const resolvedEngine = resolveDecision({
+        triggeredRules: evaluatedRules.triggeredRules,
+        ruleActions: evaluatedRules.ruleActions,
+        fraudSignals,
       });
+      const engineResult = {
+        triggeredRules: evaluatedRules.triggeredRules,
+        finalDecision: resolvedEngine.finalDecision,
+        detectedFraudSignals: fraudSignals,
+      };
+      console.log("Triggered rules:", evaluatedRules.triggeredRules);
 
       const evaluatedConditions = rules
         .filter((rule) => rule.enabled !== false)
