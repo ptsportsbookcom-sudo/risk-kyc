@@ -382,38 +382,48 @@ export default function SimulatorPage() {
       {
         id: "BULK-1",
         depositAmount: 1500,
-        deviceCount: 1,
+        deviceCount: 4,
         ipCountry: "US",
         accountCountry: "US",
       },
       {
         id: "BULK-2",
-        depositAmount: 50,
-        deviceCount: 5,
-        ipCountry: "US",
-        accountCountry: "US",
-      },
-      {
-        id: "BULK-3",
-        depositAmount: 50,
+        depositAmount: 1500,
         deviceCount: 1,
         ipCountry: "UK",
         accountCountry: "US",
       },
       {
-        id: "BULK-4",
+        id: "BULK-3",
         depositAmount: 1500,
-        deviceCount: 5,
+        deviceCount: 4,
+        ipCountry: "UK",
+        accountCountry: "US",
+      },
+      {
+        id: "BULK-4",
+        depositAmount: 50,
+        deviceCount: 4,
         ipCountry: "UK",
         accountCountry: "US",
       },
     ];
 
     const results = scenarios.map((scenario) => {
-      const engineResult = runRulesEngine({
-        eventType: "Deposit",
+      const simulationInput = {
+        eventType: "Deposit" as const,
         playerData: {
           depositAmount: scenario.depositAmount,
+          deviceCount: scenario.deviceCount,
+          ipCountry: scenario.ipCountry,
+          accountCountry: scenario.accountCountry,
+          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
+        },
+      };
+      const engineResult = runRulesEngine({
+        eventType: simulationInput.eventType,
+        playerData: {
+          depositAmount: simulationInput.playerData.depositAmount,
           withdrawalAmount: 0,
           totalDeposits: scenario.depositAmount,
           depositCount: 1,
@@ -423,16 +433,53 @@ export default function SimulatorPage() {
           betCountLastMinute: 0,
           bonusesUsed: 0,
           country: scenario.accountCountry,
-          ipCountry: scenario.ipCountry,
-          accountCountry: scenario.accountCountry,
-          deviceCount: scenario.deviceCount,
+          ipCountry: simulationInput.playerData.ipCountry,
+          accountCountry: simulationInput.playerData.accountCountry,
+          deviceCount: simulationInput.playerData.deviceCount,
           kycLevel: "L0",
           betAmount: 0,
           odds: 0,
-          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
+          flags: simulationInput.playerData.flags,
         },
         rules,
       });
+
+      const evaluatedConditions = rules
+        .filter((rule) => rule.enabled !== false)
+        .filter((rule) => rule.eventType === "ANY" || rule.eventType === simulationInput.eventType)
+        .map((rule) => {
+          const conditions =
+            rule.conditions && rule.conditions.length > 0
+              ? rule.conditions
+              : [{ field: rule.field, operator: rule.operator, value: rule.value }];
+          return {
+            ruleName: rule.name,
+            conditions: conditions.map((condition) => {
+              const leftValue =
+                condition.field === "depositAmount"
+                  ? simulationInput.playerData.depositAmount
+                  : condition.field === "deviceCount"
+                    ? simulationInput.playerData.deviceCount
+                    : condition.field === "ipCountry"
+                      ? simulationInput.playerData.ipCountry
+                      : condition.field === "accountCountry"
+                        ? simulationInput.playerData.accountCountry
+                        : condition.field === "flags"
+                          ? simulationInput.playerData.flags.join(",")
+                          : "n/a";
+              return {
+                field: condition.field,
+                operator: condition.operator,
+                expected: condition.value,
+                actual: leftValue,
+              };
+            }),
+          };
+        });
+
+      console.log("[BulkSimulation] input", simulationInput);
+      console.log("[BulkSimulation] evaluated conditions", evaluatedConditions);
+      console.log("[BulkSimulation] matched rules", engineResult.triggeredRules);
 
       return {
         scenario,
