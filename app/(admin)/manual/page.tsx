@@ -135,22 +135,6 @@ export default function ManualTriggerPage() {
     const result = runRiskEngine({ input, rules });
     console.log("MANUAL RESULT:", result);
 
-    const riskScore =
-      typeof result.riskScore === "number"
-        ? result.riskScore
-        : Math.min(
-            100,
-            (result.triggeredRules?.length || 0) * 15 +
-              (result.detectedFraudSignals?.length || 0) * 20
-          );
-
-    console.log("FINAL RISK SCORE:", {
-      engineScore: result.riskScore,
-      fallbackScore:
-        (result.triggeredRules?.length || 0) * 15 +
-        (result.detectedFraudSignals?.length || 0) * 20,
-    });
-
     const fraudFlags = result.detectedFraudSignals?.length
       ? result.detectedFraudSignals
       : [...flags];
@@ -185,6 +169,20 @@ export default function ManualTriggerPage() {
       },
     });
 
+    const fallbackRiskScore = Math.min(
+      100,
+      (result.triggeredRules?.length || 0) * 15 +
+        (result.detectedFraudSignals?.length || 0) * 20
+    );
+
+    console.log("MANUAL RISK DEBUG", {
+      engineRiskScore: result.riskScore,
+      isFinite: Number.isFinite(result.riskScore),
+      triggeredRulesCount: result.triggeredRules?.length || 0,
+      fraudSignalsCount: result.detectedFraudSignals?.length || 0,
+      fallbackRiskScore,
+    });
+
     const caseId = addCase({
       userId: normalizedUserId,
       username: normalizedUsername,
@@ -194,8 +192,23 @@ export default function ManualTriggerPage() {
       flags: finalFlags,
       triggeredRules: [...(result.triggeredRules || [])],
       fraudFlags: [...fraudFlags],
-      riskScore,
-      finalDecision: { ...result.finalDecision, riskScore },
+      riskScore: Number.isFinite(result.riskScore)
+        ? result.riskScore
+        : Math.min(
+            100,
+            (result.triggeredRules?.length || 0) * 15 +
+              (result.detectedFraudSignals?.length || 0) * 20
+          ),
+      finalDecision: {
+        ...result.finalDecision,
+        riskScore: Number.isFinite(result.riskScore)
+          ? result.riskScore
+          : Math.min(
+              100,
+              (result.triggeredRules?.length || 0) * 15 +
+                (result.detectedFraudSignals?.length || 0) * 20
+            ),
+      },
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),

@@ -33,13 +33,6 @@ function restrictionClass(restriction: string) {
   return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
 }
 
-function getRiskLabel(score: number) {
-  if (score >= 80) return "Critical";
-  if (score >= 60) return "High";
-  if (score >= 40) return "Medium";
-  return "Low";
-}
-
 function getRiskColorClass(score: number) {
   if (score >= 80) return "text-red-600";
   if (score >= 60) return "text-orange-600";
@@ -191,9 +184,18 @@ export default function ReviewPage() {
               {filteredRows.map((row) => {
                 const player = getPlayerById(row.userId);
                 const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? null;
-                const score = row.finalDecision?.riskScore ?? 0;
-                const riskLabel = getRiskLabel(score);
+                const rowRiskScore = row.riskScore;
+                const finalDecisionRisk = row.finalDecision?.riskScore;
+                const score =
+                  typeof rowRiskScore === "number" && Number.isFinite(rowRiskScore)
+                    ? rowRiskScore
+                    : typeof finalDecisionRisk === "number" &&
+                        Number.isFinite(finalDecisionRisk)
+                      ? finalDecisionRisk
+                      : 0;
                 const riskColorClass = getRiskColorClass(score);
+                const rowRiskDisplayOk =
+                  typeof rowRiskScore === "number" && Number.isFinite(rowRiskScore);
                 return (
                 <tr
                   key={row.id}
@@ -265,10 +267,9 @@ export default function ReviewPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`font-semibold ${riskColorClass}`}>
-                      {row.finalDecision?.riskScore ?? "-"}
-                      {row.finalDecision?.riskScore !== undefined
-                        ? ` (${riskLabel})`
-                        : ""}
+                      {rowRiskDisplayOk
+                        ? `${rowRiskScore} (${rowRiskScore < 30 ? "Low" : rowRiskScore < 70 ? "Medium" : "High"})`
+                        : "-"}
                     </span>
                     <p className="mt-1 text-xs text-slate-500">
                       Fraud Signals: {row.fraudFlags?.join(", ") || "None"}
@@ -316,9 +317,18 @@ export default function ReviewPage() {
             const player = getPlayerById(row.userId);
             const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? "None";
             const flags = row.flags && row.flags.length > 0 ? row.flags.join(", ") : "None";
-            const score = row.finalDecision?.riskScore ?? 0;
-            const riskLabel = getRiskLabel(score);
+            const rowRiskScore = row.riskScore;
+            const finalDecisionRisk = row.finalDecision?.riskScore;
+            const score =
+              typeof rowRiskScore === "number" && Number.isFinite(rowRiskScore)
+                ? rowRiskScore
+                : typeof finalDecisionRisk === "number" &&
+                    Number.isFinite(finalDecisionRisk)
+                  ? finalDecisionRisk
+                  : 0;
             const riskColorClass = getRiskColorClass(score);
+            const rowRiskDisplayOk =
+              typeof rowRiskScore === "number" && Number.isFinite(rowRiskScore);
             return (
               <article
                 key={row.id}
@@ -329,7 +339,10 @@ export default function ReviewPage() {
                 <p className="text-sm text-slate-700">Status: {row.status}</p>
                 <p className="text-sm text-slate-700">KYC Level: {row.kycLevel}</p>
                 <p className={`text-sm font-semibold ${riskColorClass}`}>
-                  Risk Score: {score} ({riskLabel})
+                  Risk Score:{" "}
+                  {rowRiskDisplayOk
+                    ? `${rowRiskScore} (${rowRiskScore < 30 ? "Low" : rowRiskScore < 70 ? "Medium" : "High"})`
+                    : "-"}
                 </p>
                 <p className="text-sm text-slate-700">Flags: {flags}</p>
                 <p className="text-sm text-slate-700">Restriction: {resolvedRestriction}</p>
