@@ -136,15 +136,26 @@ export default function ManualTriggerPage() {
     console.log("MANUAL RESULT:", result);
 
     const riskScore =
-      result.riskScore ??
-      (result.triggeredRules?.length || 0) * 15 +
-        (result.detectedFraudSignals?.length || 0) * 20;
+      typeof result.riskScore === "number"
+        ? result.riskScore
+        : Math.min(
+            100,
+            (result.triggeredRules?.length || 0) * 15 +
+              (result.detectedFraudSignals?.length || 0) * 20
+          );
+
+    console.log("FINAL RISK SCORE:", {
+      engineScore: result.riskScore,
+      fallbackScore:
+        (result.triggeredRules?.length || 0) * 15 +
+        (result.detectedFraudSignals?.length || 0) * 20,
+    });
 
     const fraudFlags = result.detectedFraudSignals?.length
       ? result.detectedFraudSignals
-      : flags;
+      : [...flags];
 
-    const finalFlags = result.flags?.length ? result.flags : flags;
+    const finalFlags = result.flags?.length ? [...result.flags] : [...flags];
 
     const finalVerifications = result.aggregatedActions?.verifications?.length
       ? (result.aggregatedActions.verifications as VerificationType[])
@@ -181,10 +192,10 @@ export default function ManualTriggerPage() {
       kycLevel: result.finalDecision.kycLevel,
       restrictions: finalRestrictions,
       flags: finalFlags,
-      triggeredRules: result.triggeredRules || [],
-      fraudFlags: fraudFlags,
+      triggeredRules: [...(result.triggeredRules || [])],
+      fraudFlags: [...fraudFlags],
       riskScore,
-      finalDecision: result.finalDecision,
+      finalDecision: { ...result.finalDecision, riskScore },
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),
@@ -460,11 +471,15 @@ export default function ManualTriggerPage() {
             />
             <PreviewItem
               label="Risk Score"
-              value={
-                manualResult.riskScore === undefined
-                  ? "-"
-                  : String(manualResult.riskScore)
-              }
+              value={String(
+                typeof manualResult.riskScore === "number"
+                  ? manualResult.riskScore
+                  : Math.min(
+                      100,
+                      (manualResult.triggeredRules?.length || 0) * 15 +
+                        (manualResult.detectedFraudSignals?.length || 0) * 20
+                    )
+              )}
             />
           </div>
         </section>
