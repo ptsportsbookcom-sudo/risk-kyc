@@ -130,46 +130,36 @@ export default function ManualTriggerPage() {
 
     const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
-    const input = {
-      Transaction: {
-        depositAmount: 1500,
-        withdrawalAmount: 300,
-        totalDeposits: 3000,
-        depositCount: 7,
-        withdrawalCount: 2,
-      },
-      Player: {
-        deviceCount: 5,
-        ipCountry: "DE",
-        accountCountry: "GB",
-        country: "GB",
-        kycLevel: "L0",
-      },
-      Behavior: {
-        bonusesUsed: 4,
-        betCountLastMinute: 25,
-        lastDepositTimestamp: Date.now(),
-        lastBetTimestamp: Date.now(),
-        betAmount: 120,
-        odds: 3.2,
-        flags: [],
-      },
-    };
+    const input = buildUnifiedInput(Date.now());
     console.log("MANUAL INPUT:", input);
-    const result = runRiskEngine({
-      input,
-      rules,
-    });
+    const result = runRiskEngine({ input, rules });
     console.log("MANUAL RESULT:", result);
-    const finalVerifications = result.aggregatedActions.verifications as VerificationType[];
-    const finalRestrictions = result.aggregatedActions.restrictions as RestrictionType[];
+
+    const riskScore =
+      result.riskScore ??
+      (result.triggeredRules?.length || 0) * 15 +
+        (result.detectedFraudSignals?.length || 0) * 20;
+
+    const fraudFlags = result.detectedFraudSignals?.length
+      ? result.detectedFraudSignals
+      : flags;
+
+    const finalFlags = result.flags?.length ? result.flags : flags;
+
+    const finalVerifications = result.aggregatedActions?.verifications?.length
+      ? (result.aggregatedActions.verifications as VerificationType[])
+      : verificationRequired;
+
+    const finalRestrictions = result.aggregatedActions?.restrictions?.length
+      ? (result.aggregatedActions.restrictions as RestrictionType[])
+      : restrictions;
 
     applyTriggerToPlayer({
       id: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
-      flags: result.flags,
+      flags: finalFlags,
       playerSnapshot: {
         deviceCount: input.Player.deviceCount,
         ipCountry: input.Player.ipCountry,
@@ -190,13 +180,10 @@ export default function ManualTriggerPage() {
       verificationRequired: finalVerifications,
       kycLevel: result.finalDecision.kycLevel,
       restrictions: finalRestrictions,
-      flags: result.flags || [],
+      flags: finalFlags,
       triggeredRules: result.triggeredRules || [],
-      fraudFlags: result.detectedFraudSignals || [],
-      riskScore:
-        result.riskScore ??
-        (result.triggeredRules?.length || 0) * 15 +
-          (result.detectedFraudSignals?.length || 0) * 20,
+      fraudFlags,
+      riskScore,
       finalDecision: result.finalDecision,
       source: "manual",
       reason: reason.trim(),
