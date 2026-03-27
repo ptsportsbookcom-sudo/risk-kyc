@@ -7,7 +7,7 @@ import {
 } from "@/app/components/kyc-cases-context";
 import { runRiskEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
-import { RestrictionType, Rule, useRules } from "@/app/components/rules-context";
+import { RestrictionType, useRules } from "@/app/components/rules-context";
 
 const verificationOptions: VerificationType[] = [
   "ID",
@@ -46,58 +46,34 @@ export default function ManualTriggerPage() {
   const [flags, setFlags] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const manualActionObject = {
-    verifications: actionType === "KYC" ? verificationRequired : [],
-    restrictions: actionType === "Restriction" ? restrictions : [],
-    flags: actionType === "Flag" ? flags : [],
-  };
-  const manualRuntimeRule: Rule = {
-    id: "manual-runtime",
-    name: "Manual Trigger Runtime Rule",
-    source: "manual",
-    eventType: "ANY",
-    conditions: [{ category: "Transaction", field: "depositAmount", operator: ">=", value: "0" }],
-    conditionLogic: "ALL",
-    conditionGroups: [],
-    groupLogic: "ALL",
-    field: "depositAmount",
-    operator: ">=",
-    value: "0",
-    actions: manualActionObject,
-    priority: 0,
-    enabled: true,
-    stopProcessing: true,
-    verificationRequired: manualActionObject.verifications,
-    restrictions: manualActionObject.restrictions,
-    flags: manualActionObject.flags,
+  const manualInput = {
+    Transaction: {
+      depositAmount: 0,
+      withdrawalAmount: 0,
+      totalDeposits: 0,
+      depositCount: 0,
+      withdrawalCount: 0,
+    },
+    Player: {
+      deviceCount: 1,
+      ipCountry: "US",
+      accountCountry: "US",
+      country: "US",
+      kycLevel: "L0",
+    },
+    Behavior: {
+      bonusesUsed: 0,
+      betCountLastMinute: 0,
+      lastDepositTimestamp: 0,
+      lastBetTimestamp: 0,
+      betAmount: 0,
+      odds: 1,
+      flags: actionType === "Flag" ? flags : [],
+    },
   };
   const manualResult = runRiskEngine({
-    input: {
-      Transaction: {
-        depositAmount: 0,
-        withdrawalAmount: 0,
-        totalDeposits: 0,
-        depositCount: 0,
-        withdrawalCount: 0,
-      },
-      Player: {
-        deviceCount: 1,
-        ipCountry: "US",
-        accountCountry: "US",
-        country: "US",
-        kycLevel: "L0",
-      },
-      Behavior: {
-        bonusesUsed: 0,
-        betCountLastMinute: 0,
-        lastDepositTimestamp: 0,
-        lastBetTimestamp: 0,
-        betAmount: 0,
-        odds: 1,
-        flags: [],
-      },
-    },
-    rules: [...rules, manualRuntimeRule],
+    input: manualInput,
+    rules,
   });
 
   const toggleVerification = (value: VerificationType) => {
@@ -133,30 +109,44 @@ export default function ManualTriggerPage() {
 
     const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
-    const finalVerifications = manualResult.finalDecision.verification
-      ? [manualResult.finalDecision.verification as VerificationType]
-      : [];
-    const finalRestrictions = manualResult.finalDecision.restriction
-      ? [manualResult.finalDecision.restriction as RestrictionType]
-      : [];
+    const result = runRiskEngine({
+      input: manualInput,
+      rules,
+    });
+    const finalVerifications = result.aggregatedActions.verifications as VerificationType[];
+    const finalRestrictions = result.aggregatedActions.restrictions as RestrictionType[];
 
     applyTriggerToPlayer({
       id: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
-      flags: manualResult.finalDecision.flags,
+      flags: result.flags,
+      playerSnapshot: {
+        deviceCount: manualInput.Player.deviceCount,
+        ipCountry: manualInput.Player.ipCountry,
+        accountCountry: manualInput.Player.accountCountry,
+        totalDeposits: manualInput.Transaction.totalDeposits,
+        depositCount: manualInput.Transaction.depositCount,
+        withdrawalCount: manualInput.Transaction.withdrawalCount,
+        lastDepositTimestamp: manualInput.Behavior.lastDepositTimestamp,
+        lastBetTimestamp: manualInput.Behavior.lastBetTimestamp,
+        betCountLastMinute: manualInput.Behavior.betCountLastMinute,
+        bonusesUsed: manualInput.Behavior.bonusesUsed,
+      },
     });
 
     const caseId = addCase({
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
-      kycLevel: manualResult.finalDecision.kycLevel,
+      kycLevel: result.finalDecision.kycLevel,
       restrictions: finalRestrictions,
-      flags: manualResult.finalDecision.flags,
-      triggeredRules: manualResult.triggeredRules,
-      fraudFlags: [],
+      flags: result.flags,
+      triggeredRules: result.triggeredRules,
+      fraudFlags: result.detectedFraudSignals,
+      riskScore: result.riskScore,
+      finalDecision: result.finalDecision,
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),

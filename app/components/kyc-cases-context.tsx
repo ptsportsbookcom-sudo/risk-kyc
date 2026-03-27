@@ -49,6 +49,7 @@ export type KycCase = {
   selfExclusionUntil?: string | null;
   triggeredRules?: Array<{ id: string; name: string; priority: number }>;
   fraudFlags?: string[];
+  riskScore?: number;
   finalDecision?: {
     verification: string | null;
     kycLevel: KycLevel;
@@ -75,6 +76,7 @@ type CreateKycCaseInput = {
   selfExclusionUntil?: string | null;
   triggeredRules?: Array<{ id: string; name: string; priority: number }>;
   fraudFlags?: string[];
+  riskScore?: number;
   finalDecision?: {
     verification: string | null;
     kycLevel: KycLevel;
@@ -250,6 +252,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         selfExclusionUntil: input.selfExclusionUntil,
         triggeredRules: input.triggeredRules ?? [],
         fraudFlags: input.fraudFlags ?? [],
+        riskScore: input.riskScore,
         finalDecision: input.finalDecision,
         restrictions: input.restrictions,
         flags: input.flags ?? [],
