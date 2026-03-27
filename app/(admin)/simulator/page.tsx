@@ -31,6 +31,26 @@ type SimulationResult = {
   selfExclusionUntil: string;
 };
 
+type BulkScenario = {
+  id: string;
+  depositAmount: number;
+  deviceCount: number;
+  ipCountry: string;
+  accountCountry: string;
+};
+
+type BulkSimulationResult = {
+  scenario: BulkScenario;
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  finalDecision: {
+    verification: string | null;
+    kycLevel: "L0" | "L1" | "L2" | "L3";
+    restriction: string | null;
+    flags: string[];
+  };
+  fraudFlags: string[];
+};
+
 const initialResult: SimulationResult = {
   triggeredAction: "No action triggered yet",
   triggeredRules: [],
@@ -81,6 +101,8 @@ export default function SimulatorPage() {
   const [result, setResult] = useState<SimulationResult>(initialResult);
   const [actionCheckResult, setActionCheckResult] = useState("");
   const [activePlayerId, setActivePlayerId] = useState("");
+  const [bulkResults, setBulkResults] = useState<BulkSimulationResult[]>([]);
+  const [bulkCaseMessage, setBulkCaseMessage] = useState("");
 
   const runSimulation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -355,6 +377,120 @@ export default function SimulatorPage() {
     setActionCheckResult("Blocked due to Full Account Block");
   };
 
+  const runBulkSimulation = () => {
+    const scenarios: BulkScenario[] = [
+      {
+        id: "BULK-1",
+        depositAmount: 1500,
+        deviceCount: 1,
+        ipCountry: "US",
+        accountCountry: "US",
+      },
+      {
+        id: "BULK-2",
+        depositAmount: 50,
+        deviceCount: 5,
+        ipCountry: "US",
+        accountCountry: "US",
+      },
+      {
+        id: "BULK-3",
+        depositAmount: 50,
+        deviceCount: 1,
+        ipCountry: "UK",
+        accountCountry: "US",
+      },
+      {
+        id: "BULK-4",
+        depositAmount: 1500,
+        deviceCount: 5,
+        ipCountry: "UK",
+        accountCountry: "US",
+      },
+    ];
+
+    const results = scenarios.map((scenario) => {
+      const engineResult = runRulesEngine({
+        eventType: "Deposit",
+        playerData: {
+          depositAmount: scenario.depositAmount,
+          withdrawalAmount: 0,
+          totalDeposits: scenario.depositAmount,
+          depositCount: 1,
+          withdrawalCount: 0,
+          lastDepositTimestamp: Date.now(),
+          lastBetTimestamp: Date.now(),
+          betCountLastMinute: 0,
+          bonusesUsed: 0,
+          country: scenario.accountCountry,
+          ipCountry: scenario.ipCountry,
+          accountCountry: scenario.accountCountry,
+          deviceCount: scenario.deviceCount,
+          kycLevel: "L0",
+          betAmount: 0,
+          odds: 0,
+          flags: scenario.ipCountry !== scenario.accountCountry ? ["COUNTRY_MISMATCH"] : [],
+        },
+        rules,
+      });
+
+      return {
+        scenario,
+        triggeredRules: engineResult.triggeredRules,
+        finalDecision: {
+          verification: engineResult.finalDecision.verification,
+          kycLevel: engineResult.finalDecision.kycLevel,
+          restriction: engineResult.finalDecision.restriction,
+          flags: engineResult.finalDecision.flags,
+        },
+        fraudFlags: engineResult.detectedFraudSignals,
+      };
+    });
+
+    setBulkResults(results);
+    setBulkCaseMessage("");
+  };
+
+  const createCasesFromBulkResults = () => {
+    const eligible = bulkResults.filter((resultItem) => resultItem.triggeredRules.length > 0);
+    if (eligible.length === 0) {
+      setBulkCaseMessage("No bulk results with triggered rules.");
+      return;
+    }
+
+    let createdCount = 0;
+    eligible.forEach((resultItem) => {
+      const caseId = addCase({
+        userId: resultItem.scenario.id,
+        username: `bulk_player_${resultItem.scenario.id.toLowerCase()}`,
+        verificationRequired: resultItem.finalDecision.verification
+          ? [resultItem.finalDecision.verification as VerificationType]
+          : [],
+        kycLevel: resultItem.finalDecision.kycLevel,
+        restrictions: resultItem.finalDecision.restriction
+          ? [resultItem.finalDecision.restriction as RestrictionType]
+          : [],
+        flags: resultItem.finalDecision.flags,
+        triggeredRules: resultItem.triggeredRules,
+        fraudFlags: resultItem.fraudFlags,
+        source: "simulation",
+      });
+
+      resultItem.triggeredRules.forEach((rule) => {
+        addAuditLog({
+          caseId,
+          userId: resultItem.scenario.id,
+          type: "rule_triggered",
+          description: `Rule triggered: ${rule.name}`,
+          metadata: { ruleId: rule.id, priority: rule.priority, source: "bulk_simulation" },
+        });
+      });
+      createdCount += 1;
+    });
+
+    setBulkCaseMessage(`${createdCount} case(s) created from bulk results.`);
+  };
+
   return (
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -362,6 +498,15 @@ export default function SimulatorPage() {
         <p className="mt-1 text-sm text-slate-600">
           Simulate user events and evaluate KYC and restriction outcomes.
         </p>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={runBulkSimulation}
+            className="min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100 sm:w-auto"
+          >
+            Run Bulk Simulation
+          </button>
+        </div>
 
         <form className="mt-5 space-y-4" onSubmit={runSimulation}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -602,6 +747,64 @@ export default function SimulatorPage() {
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <h4 className="text-base font-semibold text-slate-900">Bulk Simulation Results</h4>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={createCasesFromBulkResults}
+            className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 sm:w-auto"
+          >
+            Create Cases from Bulk Results
+          </button>
+          {bulkCaseMessage ? (
+            <p className="mt-2 text-sm text-slate-700">{bulkCaseMessage}</p>
+          ) : null}
+        </div>
+        {bulkResults.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No bulk simulation run yet.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {bulkResults.map((item) => (
+              <article
+                key={item.scenario.id}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+              >
+                <p className="text-sm font-semibold text-slate-900">
+                  Scenario {item.scenario.id}: deposit={item.scenario.depositAmount}, deviceCount=
+                  {item.scenario.deviceCount}, ipCountry={item.scenario.ipCountry}, accountCountry=
+                  {item.scenario.accountCountry}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Triggered Rules:{" "}
+                  {item.triggeredRules.length > 0
+                    ? item.triggeredRules.map((rule) => rule.name).join(", ")
+                    : "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Final Verification: {item.finalDecision.verification ?? "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Final Restriction: {item.finalDecision.restriction ?? "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Flags:{" "}
+                  {item.finalDecision.flags.length > 0
+                    ? item.finalDecision.flags.join(", ")
+                    : "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Fraud Flags: {item.fraudFlags.length > 0 ? item.fraudFlags.join(", ") : "None"}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Final KYC Level: {item.finalDecision.kycLevel}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
