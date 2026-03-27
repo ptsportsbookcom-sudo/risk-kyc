@@ -85,13 +85,14 @@ const FRAUD_SIGNAL_ACTIONS: Record<string, { verification?: string; restriction?
   HIGH_DEPOSIT_VELOCITY: { verification: "Selfie" },
 };
 
-const FRAUD_SIGNAL_SCORES: Record<string, number> = {
-  MULTI_ACCOUNT: 40,
-  COUNTRY_MISMATCH: 25,
-  BONUS_ABUSE: 30,
-  BET_VELOCITY: 20,
-  HIGH_DEPOSIT_VELOCITY: 35,
-};
+function calculateRiskScore(input: {
+  triggeredRules: Array<{ id: string; name: string; priority: number }>;
+  fraudSignals: string[];
+}) {
+  const ruleScore = input.triggeredRules.length * 15;
+  const fraudScore = input.fraudSignals.length * 20;
+  return Math.min(100, ruleScore + fraudScore);
+}
 
 function evaluateOperator(
   left: number | string,
@@ -378,19 +379,14 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
   }).flags;
 
   const evaluated = evaluateRules(input.input, input.rules);
-  const signalScore = detectedFraudSignals.reduce((sum, flag) => {
-    return sum + (FRAUD_SIGNAL_SCORES[flag] || 0);
-  }, 0);
-  const ruleScore = evaluated.triggeredRules.reduce((sum, rule) => {
-    if (rule.priority <= 20) return sum + 40;
-    if (rule.priority <= 40) return sum + 25;
-    return sum + 10;
-  }, 0);
-  const totalRiskScore = signalScore + ruleScore;
+  const riskScore = calculateRiskScore({
+    triggeredRules: evaluated.triggeredRules,
+    fraudSignals: detectedFraudSignals,
+  });
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
     fraudFlags: detectedFraudSignals,
-    riskScore: totalRiskScore,
+    riskScore,
   });
 
   const result = {
