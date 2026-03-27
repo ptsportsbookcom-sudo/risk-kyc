@@ -341,8 +341,14 @@ export function resolveDecision(input: {
           : "L0";
 
   const uniqueFlags = Array.from(new Set(flags));
+  const mergedVerifications = Array.from(
+    new Set([
+      ...verificationLevels,
+      ...(finalVerification ? [finalVerification] : []),
+    ])
+  );
   const aggregatedActions = {
-    verifications: finalVerification ? [finalVerification] : [],
+    verifications: mergedVerifications,
     restrictions: Array.from(
       new Set(finalRestriction ? [finalRestriction, ...uniqueRestrictions] : uniqueRestrictions)
     ),
@@ -379,13 +385,16 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
   }).flags;
 
   const evaluated = evaluateRules(input.input, input.rules);
+  const mergedDetectedFraudSignals = Array.from(
+    new Set([...(detectedFraudSignals || []), ...(evaluated.ruleActions.flags || [])])
+  );
   const riskScore = calculateRiskScore({
     triggeredRules: evaluated.triggeredRules,
-    fraudSignals: detectedFraudSignals,
+    fraudSignals: mergedDetectedFraudSignals,
   });
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
-    fraudFlags: detectedFraudSignals,
+    fraudFlags: mergedDetectedFraudSignals,
     riskScore,
   });
 
@@ -398,7 +407,7 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
     finalKycLevel: resolved.finalDecision.kycLevel,
     aggregatedActions: resolved.aggregatedActions,
     finalDecision: resolved.finalDecision,
-    detectedFraudSignals,
+    detectedFraudSignals: mergedDetectedFraudSignals,
   };
 
   console.log("INPUT:", input.input);
