@@ -131,9 +131,22 @@ export default function ManualTriggerPage() {
     const normalizedUserId = userId.trim() || `MANUAL-${crypto.randomUUID()}`;
     const normalizedUsername = username.trim() || "manual_user";
     const input = buildUnifiedInput(Date.now());
-    console.log("MANUAL INPUT:", input);
     const result = runRiskEngine({ input, rules });
-    console.log("MANUAL RESULT:", result);
+
+    const computedRiskScore = Number.isFinite(result.riskScore)
+      ? result.riskScore
+      : Math.min(
+          100,
+          (result.triggeredRules?.length || 0) * 15 +
+            (result.detectedFraudSignals?.length || 0) * 20
+        );
+
+    console.log("MANUAL DEBUG", {
+      engineRiskScore: result.riskScore,
+      computedRiskScore,
+      triggeredRules: result.triggeredRules,
+      fraudSignals: result.detectedFraudSignals,
+    });
 
     const fraudFlags = result.detectedFraudSignals?.length
       ? result.detectedFraudSignals
@@ -169,20 +182,6 @@ export default function ManualTriggerPage() {
       },
     });
 
-    const fallbackRiskScore = Math.min(
-      100,
-      (result.triggeredRules?.length || 0) * 15 +
-        (result.detectedFraudSignals?.length || 0) * 20
-    );
-
-    console.log("MANUAL RISK DEBUG", {
-      engineRiskScore: result.riskScore,
-      isFinite: Number.isFinite(result.riskScore),
-      triggeredRulesCount: result.triggeredRules?.length || 0,
-      fraudSignalsCount: result.detectedFraudSignals?.length || 0,
-      fallbackRiskScore,
-    });
-
     const caseId = addCase({
       userId: normalizedUserId,
       username: normalizedUsername,
@@ -192,22 +191,10 @@ export default function ManualTriggerPage() {
       flags: finalFlags,
       triggeredRules: [...(result.triggeredRules || [])],
       fraudFlags: [...fraudFlags],
-      riskScore: Number.isFinite(result.riskScore)
-        ? result.riskScore
-        : Math.min(
-            100,
-            (result.triggeredRules?.length || 0) * 15 +
-              (result.detectedFraudSignals?.length || 0) * 20
-          ),
+      riskScore: computedRiskScore,
       finalDecision: {
         ...result.finalDecision,
-        riskScore: Number.isFinite(result.riskScore)
-          ? result.riskScore
-          : Math.min(
-              100,
-              (result.triggeredRules?.length || 0) * 15 +
-                (result.detectedFraudSignals?.length || 0) * 20
-            ),
+        riskScore: computedRiskScore,
       },
       source: "manual",
       reason: reason.trim(),
@@ -485,7 +472,7 @@ export default function ManualTriggerPage() {
             <PreviewItem
               label="Risk Score"
               value={String(
-                typeof manualResult.riskScore === "number"
+                Number.isFinite(manualResult.riskScore)
                   ? manualResult.riskScore
                   : Math.min(
                       100,
