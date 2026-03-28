@@ -234,6 +234,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
   };
 
   const addCase = (input: CreateKycCaseInput) => {
+    console.log("CASE STORE", input);
     const now = new Date();
     const createdDate = now.toISOString().slice(0, 10);
     const caseId = `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -254,7 +255,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         selfExclusionUntil: input.selfExclusionUntil,
         triggeredRules: input.triggeredRules ?? [],
         fraudFlags: input.fraudFlags ?? [],
-        riskScore: input.riskScore,
+        riskScore: input.riskScore ?? 0,
         finalDecision: input.finalDecision,
         restrictions: input.restrictions,
         flags: input.flags ?? [],

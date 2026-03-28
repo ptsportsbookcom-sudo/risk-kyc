@@ -400,7 +400,7 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
     new Set([...(detectedFraudSignals || []), ...(aggregatedActions.flags || [])])
   );
 
-  const result = {
+  let result = {
     triggeredRules: evaluated.triggeredRules,
     detectedFraudSignals,
     aggregatedActions,
@@ -409,33 +409,25 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
     finalDecision,
   };
 
-  const safeTriggeredRules = result.triggeredRules || [];
-  const safeFraudSignals = result.detectedFraudSignals || [];
+  const triggeredRulesSafe = result.triggeredRules ?? [];
+  const fraudSignalsSafe = result.detectedFraudSignals ?? [];
 
-  const computedRiskScore =
-    typeof result.riskScore === "number" && !isNaN(result.riskScore)
-      ? result.riskScore
-      : Math.min(
-          100,
-          safeTriggeredRules.length * 15 + safeFraudSignals.length * 20
-        );
+  const computedRiskScore = Math.min(
+    100,
+    triggeredRulesSafe.length * 15 + fraudSignalsSafe.length * 20
+  );
 
-  const merged = {
-    ...result,
-    triggeredRules: safeTriggeredRules,
-    detectedFraudSignals: safeFraudSignals,
+  result.riskScore = computedRiskScore;
+  result.finalDecision = {
+    ...result.finalDecision,
     riskScore: computedRiskScore,
-    finalDecision: {
-      ...result.finalDecision,
-      riskScore: computedRiskScore,
-    },
   };
 
   console.log("INPUT:", input.input);
-  console.log("TRIGGERED RULES:", merged.triggeredRules);
-  console.log("FINAL DECISION:", merged);
+  console.log("TRIGGERED RULES:", result.triggeredRules);
+  console.log("FINAL DECISION:", result);
 
-  return merged;
+  return result;
 }
 
 export function runRulesEngine({ input, rules }: RulesEngineInput): RulesEngineResult {

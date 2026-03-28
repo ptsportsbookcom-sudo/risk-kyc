@@ -267,6 +267,8 @@ export default function SimulatorPage() {
         flags: engineResult.finalDecision.flags,
         triggeredRules: engineResult.triggeredRules,
         fraudFlags: engineResult.detectedFraudSignals,
+        riskScore: engineResult.riskScore,
+        finalDecision: engineResult.finalDecision,
         source: "simulation",
       });
       engineResult.triggeredRules.forEach((rule) => {
@@ -390,6 +392,7 @@ export default function SimulatorPage() {
           : new Date(updatedPlayer.selfExclusionUntil).toISOString(),
       triggeredRules: [],
       fraudFlags: [],
+      riskScore: 0,
     });
     addAuditLog({
       caseId,
@@ -513,6 +516,7 @@ export default function SimulatorPage() {
         flags: resultItem.finalDecision.flags,
         triggeredRules: resultItem.triggeredRules,
         fraudFlags: resultItem.fraudFlags,
+        riskScore: resultItem.finalDecision.riskScore ?? 0,
         finalDecision: resultItem.finalDecision,
         source: "simulation",
         status: "Pending",
