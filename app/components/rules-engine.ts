@@ -409,11 +409,33 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
     finalDecision,
   };
 
-  console.log("INPUT:", input.input);
-  console.log("TRIGGERED RULES:", result.triggeredRules);
-  console.log("FINAL DECISION:", result);
+  const safeTriggeredRules = result.triggeredRules || [];
+  const safeFraudSignals = result.detectedFraudSignals || [];
 
-  return result;
+  const computedRiskScore =
+    typeof result.riskScore === "number" && !isNaN(result.riskScore)
+      ? result.riskScore
+      : Math.min(
+          100,
+          safeTriggeredRules.length * 15 + safeFraudSignals.length * 20
+        );
+
+  const merged = {
+    ...result,
+    triggeredRules: safeTriggeredRules,
+    detectedFraudSignals: safeFraudSignals,
+    riskScore: computedRiskScore,
+    finalDecision: {
+      ...result.finalDecision,
+      riskScore: computedRiskScore,
+    },
+  };
+
+  console.log("INPUT:", input.input);
+  console.log("TRIGGERED RULES:", merged.triggeredRules);
+  console.log("FINAL DECISION:", merged);
+
+  return merged;
 }
 
 export function runRulesEngine({ input, rules }: RulesEngineInput): RulesEngineResult {

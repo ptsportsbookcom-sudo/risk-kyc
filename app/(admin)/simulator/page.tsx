@@ -474,7 +474,7 @@ export default function SimulatorPage() {
           kycLevel: engineResult.finalDecision.kycLevel,
           restriction: engineResult.finalDecision.restriction,
           flags: engineResult.finalDecision.flags,
-          riskScore: engineResult.riskScore ?? engineResult.finalDecision.riskScore ?? 0,
+          riskScore: engineResult.riskScore,
         },
         fraudFlags: engineResult.detectedFraudSignals,
       };

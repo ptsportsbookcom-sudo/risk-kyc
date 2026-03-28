@@ -133,17 +133,8 @@ export default function ManualTriggerPage() {
     const input = buildUnifiedInput(Date.now());
     const result = runRiskEngine({ input, rules });
 
-    const computedRiskScore = Number.isFinite(result.riskScore)
-      ? result.riskScore
-      : Math.min(
-          100,
-          (result.triggeredRules?.length || 0) * 15 +
-            (result.detectedFraudSignals?.length || 0) * 20
-        );
-
     console.log("MANUAL DEBUG", {
-      engineRiskScore: result.riskScore,
-      computedRiskScore,
+      riskScore: result.riskScore,
       triggeredRules: result.triggeredRules,
       fraudSignals: result.detectedFraudSignals,
     });
@@ -191,11 +182,8 @@ export default function ManualTriggerPage() {
       flags: finalFlags,
       triggeredRules: [...(result.triggeredRules || [])],
       fraudFlags: [...fraudFlags],
-      riskScore: computedRiskScore,
-      finalDecision: {
-        ...result.finalDecision,
-        riskScore: computedRiskScore,
-      },
+      riskScore: result.riskScore,
+      finalDecision: result.finalDecision,
       source: "manual",
       reason: reason.trim(),
       createdAt: new Date().toISOString(),
@@ -471,15 +459,7 @@ export default function ManualTriggerPage() {
             />
             <PreviewItem
               label="Risk Score"
-              value={String(
-                Number.isFinite(manualResult.riskScore)
-                  ? manualResult.riskScore
-                  : Math.min(
-                      100,
-                      (manualResult.triggeredRules?.length || 0) * 15 +
-                        (manualResult.detectedFraudSignals?.length || 0) * 20
-                    )
-              )}
+              value={String(manualResult.riskScore)}
             />
           </div>
         </section>
