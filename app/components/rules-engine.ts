@@ -365,7 +365,7 @@ export function resolveDecision(input: {
 
 export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] }) {
   const normalizedInput = flattenUnifiedInput(input.input);
-  let detectedFraudSignals = getFraudSignals({
+  const detectedFraudSignals = getFraudSignals({
     deviceCount: normalizedInput.deviceCount,
     ipCountry: normalizedInput.ipCountry,
     accountCountry: normalizedInput.accountCountry,
@@ -380,47 +380,40 @@ export function runRiskEngine(input: { input: UnifiedRiskInput; rules: Rule[] })
 
   const evaluated = evaluateRules(input.input, input.rules);
 
-  detectedFraudSignals = Array.from(
-    new Set([...(detectedFraudSignals || []), ...(evaluated.ruleActions.flags || [])])
+  const finalTriggeredRules = evaluated.triggeredRules ?? [];
+  const finalFraudSignals = Array.from(
+    new Set([
+      ...(detectedFraudSignals || []),
+      ...(evaluated.ruleActions?.flags || []),
+    ])
   );
 
-  const ruleScore = (evaluated.triggeredRules?.length || 0) * 15;
-  const fraudScore = (detectedFraudSignals?.length || 0) * 20;
-  const riskScore = Math.min(100, ruleScore + fraudScore);
+  const riskScore = Math.min(
+    100,
+    finalTriggeredRules.length * 15 + finalFraudSignals.length * 20
+  );
 
   const resolved = resolveDecision({
     triggeredRules: evaluated.triggeredRules,
-    fraudFlags: detectedFraudSignals,
+    fraudFlags: finalFraudSignals,
     riskScore,
   });
 
-  const { aggregatedActions, finalDecision } = resolved;
+  const { aggregatedActions, finalDecision: resolvedFinalDecision } = resolved;
 
-  detectedFraudSignals = Array.from(
-    new Set([...(detectedFraudSignals || []), ...(aggregatedActions.flags || [])])
-  );
-
-  let result = {
+  const result = {
     triggeredRules: evaluated.triggeredRules,
-    detectedFraudSignals,
+    flags: resolvedFinalDecision.flags,
+    finalVerification: resolvedFinalDecision.verification,
+    finalRestriction: resolvedFinalDecision.restriction,
+    finalKycLevel: resolvedFinalDecision.kycLevel,
     aggregatedActions,
+    finalDecision: {
+      ...resolvedFinalDecision,
+      riskScore,
+    },
+    detectedFraudSignals: finalFraudSignals,
     riskScore,
-    flags: aggregatedActions.flags,
-    finalDecision,
-  };
-
-  const triggeredRulesSafe = result.triggeredRules ?? [];
-  const fraudSignalsSafe = result.detectedFraudSignals ?? [];
-
-  const computedRiskScore = Math.min(
-    100,
-    triggeredRulesSafe.length * 15 + fraudSignalsSafe.length * 20
-  );
-
-  result.riskScore = computedRiskScore;
-  result.finalDecision = {
-    ...result.finalDecision,
-    riskScore: computedRiskScore,
   };
 
   console.log("INPUT:", input.input);
