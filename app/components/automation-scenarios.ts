@@ -143,15 +143,16 @@ function createScenarioEvents(type: ScenarioId): {
   }
 
   if (type === "HIGH_DEPOSIT") {
+    const depositEvents = randomInt(6, 8);
+    const baseTime = now - 4 * 60 * 1000; // keep within getFraudSignals short window
+    const intervalMs = 15 * 1000;
     return {
       eventType: "Deposit",
-      events: [
-        {
-          type: "deposit",
-          amount: randomInt(1100, 3000),
-          timestamp: now,
-        },
-      ],
+      events: Array.from({ length: depositEvents }, (_, index) => ({
+        type: "deposit" as const,
+        amount: randomInt(200, 1500),
+        timestamp: baseTime + index * intervalMs,
+      })),
     };
   }
 
@@ -171,7 +172,7 @@ function createScenarioEvents(type: ScenarioId): {
   }
 
   if (type === "BONUS_ABUSE") {
-    const bonusClaims = randomInt(2, 5);
+    const bonusClaims = randomInt(3, 5);
     const bonusEvents: ScenarioEvent[] = Array.from({ length: bonusClaims }, (_, index) => ({
       type: "claim_bonus",
       bonusCode: `WELCOME-${index + 1}`,
@@ -190,13 +191,13 @@ function createScenarioEvents(type: ScenarioId): {
     };
   }
 
-  const betEvents = randomInt(12, 25);
+  const betEvents = randomInt(22, 30);
   return {
     eventType: "Bet Placement",
     events: Array.from({ length: betEvents }, (_, index) => ({
       type: "bet",
-      amount: randomInt(5, 120),
-      odds: Number((Math.random() * 3 + 1).toFixed(2)),
+      amount: randomInt(70, 120),
+      odds: Number((Math.random() * 1.4 + 2.6).toFixed(2)), // keep high for HIGH_RISK_BET rule
       isLive: Math.random() > 0.5,
       timestamp: now - randomInt(0, 59_000) + index * 500,
     })),
@@ -233,11 +234,11 @@ export function createAutoRulesFromScenarios(selectedScenarioIds: ScenarioId[]):
         field: "deviceCount",
         operator: ">",
         value: "3",
-        actions: { verifications: [], restrictions: [], flags: ["MULTI_ACCOUNT"] },
+        actions: { verifications: ["Full KYC"], restrictions: [], flags: ["MULTI_ACCOUNT"] },
         priority: 40,
         enabled: true,
         stopProcessing: false,
-        verificationRequired: [],
+        verificationRequired: ["Full KYC"],
         restrictions: [],
         flags: ["MULTI_ACCOUNT"],
       };
@@ -245,25 +246,26 @@ export function createAutoRulesFromScenarios(selectedScenarioIds: ScenarioId[]):
 
     if (id === "HIGH_DEPOSIT") {
       return {
-        name: "AUTO: High Deposit KYC Escalation",
+        name: "AUTO: High Deposit Velocity Escalation",
         source: "auto" as const,
         eventType: "Deposit",
         conditions: [
-          { category: "Transaction", field: "depositAmount", operator: ">", value: "1000" },
+          { category: "Transaction", field: "depositCount", operator: ">", value: "5" },
+          { category: "Transaction", field: "lastDepositTimestamp", operator: ">", value: "0" },
         ],
         conditionLogic: "ALL",
         conditionGroups: [],
         groupLogic: "ALL",
-        field: "depositAmount",
+        field: "depositCount",
         operator: ">",
-        value: "1000",
-        actions: { verifications: ["Full KYC"], restrictions: [], flags: [] },
+        value: "5",
+        actions: { verifications: ["Full KYC"], restrictions: [], flags: ["HIGH_DEPOSIT_VELOCITY"] },
         priority: 20,
         enabled: true,
         stopProcessing: false,
         verificationRequired: ["Full KYC"],
         restrictions: [],
-        flags: [],
+        flags: ["HIGH_DEPOSIT_VELOCITY"],
       };
     }
 
@@ -281,11 +283,11 @@ export function createAutoRulesFromScenarios(selectedScenarioIds: ScenarioId[]):
         field: "ipCountry",
         operator: "!=",
         value: "$accountCountry",
-        actions: { verifications: [], restrictions: [], flags: ["COUNTRY_MISMATCH"] },
+        actions: { verifications: ["ID"], restrictions: [], flags: ["COUNTRY_MISMATCH"] },
         priority: 30,
         enabled: true,
         stopProcessing: false,
-        verificationRequired: [],
+        verificationRequired: ["ID"],
         restrictions: [],
         flags: ["COUNTRY_MISMATCH"],
       };
@@ -297,44 +299,45 @@ export function createAutoRulesFromScenarios(selectedScenarioIds: ScenarioId[]):
         source: "auto" as const,
         eventType: "Bonus",
         conditions: [
-          { category: "Bonus", field: "bonusesUsed", operator: ">", value: "1" },
+          { category: "Bonus", field: "bonusesUsed", operator: ">", value: "2" },
         ],
         conditionLogic: "ALL",
         conditionGroups: [],
         groupLogic: "ALL",
         field: "bonusesUsed",
         operator: ">",
-        value: "1",
-        actions: { verifications: [], restrictions: [], flags: ["BONUS_ABUSE"] },
+        value: "2",
+        actions: { verifications: [], restrictions: ["Withdrawal Block"], flags: ["BONUS_ABUSE"] },
         priority: 35,
         enabled: true,
         stopProcessing: false,
         verificationRequired: [],
-        restrictions: [],
+        restrictions: ["Withdrawal Block"],
         flags: ["BONUS_ABUSE"],
       };
     }
 
     return {
-      name: "AUTO: High Bet Velocity",
+      name: "AUTO: High Risk Bet Monitoring",
       source: "auto" as const,
       eventType: "Bet Placement",
       conditions: [
-        { category: "Betting", field: "betCountLastMinute", operator: ">", value: "10" },
+        { category: "Betting", field: "betAmount", operator: ">", value: "80" },
+        { category: "Betting", field: "odds", operator: ">", value: "2.5" },
       ],
       conditionLogic: "ALL",
       conditionGroups: [],
       groupLogic: "ALL",
-      field: "betCountLastMinute",
+      field: "betAmount",
       operator: ">",
-      value: "10",
-      actions: { verifications: [], restrictions: [], flags: ["BET_VELOCITY"] },
+      value: "80",
+      actions: { verifications: [], restrictions: [], flags: ["HIGH_RISK_BET"] },
       priority: 36,
       enabled: true,
       stopProcessing: false,
       verificationRequired: [],
       restrictions: [],
-      flags: ["BET_VELOCITY"],
+      flags: ["HIGH_RISK_BET"],
     };
   });
 }

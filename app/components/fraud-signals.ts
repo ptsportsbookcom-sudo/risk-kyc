@@ -38,7 +38,7 @@ export function getFraudSignals(player: FraudSignalPlayer) {
 
   if (player.betCountLastMinute > 20) flags.push("BET_VELOCITY");
 
-  if (player.bonusesUsed > 3) flags.push("BONUS_ABUSE");
+  if (player.bonusesUsed > 2) flags.push("BONUS_ABUSE");
 
   return { flags };
 }
