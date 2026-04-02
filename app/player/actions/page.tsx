@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { canUserPerformAction } from "@/app/components/enforcement";
-import { useKycCases } from "@/app/components/kyc-cases-context";
+import { useKycCases, VerificationType } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+import { handleRiskEvent, RiskEventType } from "@/app/components/risk-events";
 import { RestrictionType } from "@/app/components/rules-context";
+import { useRules } from "@/app/components/rules-context";
 
 type PlayerAction = "Deposit" | "Withdraw" | "Play Casino";
 const restrictionValues: RestrictionType[] = [
@@ -26,7 +28,8 @@ function toRestrictionType(value: string | null | undefined): RestrictionType | 
 export default function PlayerActionsPage() {
   const router = useRouter();
   const { cases } = useKycCases();
-  const { clearExpiredSelfExclusion, getPlayerById } = usePlayers();
+  const { rules } = useRules();
+  const { clearExpiredSelfExclusion, getPlayerById, applyTriggerToPlayer } = usePlayers();
   const [message, setMessage] = useState("");
   const [depositAmount, setDepositAmount] = useState("50");
 
@@ -89,6 +92,100 @@ export default function PlayerActionsPage() {
       setMessage("Casino play is blocked until you complete verification.");
       router.push("/player?reason=Complete%20verification%20to%20play%20casino");
       return;
+    }
+
+    if (pendingCase && refreshedPlayer) {
+      const now = Date.now();
+      const parsedDepositAmount = Number(depositAmount || 0);
+      const baseInput = {
+        Transaction: {
+          depositAmount: 0,
+          withdrawalAmount: 0,
+          totalDeposits: refreshedPlayer.totalDeposits ?? 0,
+          depositCount: refreshedPlayer.depositCount ?? 0,
+          withdrawalCount: refreshedPlayer.withdrawalCount ?? 0,
+        },
+        Player: {
+          deviceCount: refreshedPlayer.deviceCount ?? 1,
+          ipCountry: refreshedPlayer.ipCountry ?? "US",
+          accountCountry: refreshedPlayer.accountCountry ?? "US",
+          country: refreshedPlayer.accountCountry ?? "US",
+          kycLevel: refreshedPlayer.kycLevel ?? "L0",
+        },
+        Behavior: {
+          bonusesUsed: refreshedPlayer.bonusesUsed ?? 0,
+          betCountLastMinute: refreshedPlayer.betCountLastMinute ?? 0,
+          lastDepositTimestamp: refreshedPlayer.lastDepositTimestamp ?? 0,
+          lastBetTimestamp: refreshedPlayer.lastBetTimestamp ?? 0,
+          betAmount: 0,
+          odds: 1,
+          flags: refreshedPlayer.flags ?? [],
+        },
+      };
+
+      let eventType: RiskEventType = "LOGIN";
+      let input = baseInput;
+
+      if (action === "Deposit") {
+        eventType = "DEPOSIT";
+        input = {
+          ...baseInput,
+          Transaction: {
+            ...baseInput.Transaction,
+            depositAmount: parsedDepositAmount,
+            totalDeposits: (baseInput.Transaction.totalDeposits ?? 0) + parsedDepositAmount,
+            depositCount: (baseInput.Transaction.depositCount ?? 0) + 1,
+          },
+          Behavior: {
+            ...baseInput.Behavior,
+            lastDepositTimestamp: now,
+          },
+        };
+      } else if (action === "Withdraw") {
+        eventType = "WITHDRAWAL";
+        input = {
+          ...baseInput,
+          Transaction: {
+            ...baseInput.Transaction,
+            withdrawalAmount: Math.max(0, parsedDepositAmount),
+            withdrawalCount: (baseInput.Transaction.withdrawalCount ?? 0) + 1,
+          },
+        };
+      } else if (action === "Play Casino") {
+        eventType = "BET";
+        input = {
+          ...baseInput,
+          Behavior: {
+            ...baseInput.Behavior,
+            betAmount: 25,
+            odds: 2.1,
+            lastBetTimestamp: now,
+            betCountLastMinute: (baseInput.Behavior.betCountLastMinute ?? 0) + 1,
+          },
+        };
+      }
+
+      const risk = handleRiskEvent(eventType, input, rules);
+      applyTriggerToPlayer({
+        id: pendingCase.userId,
+        username: pendingCase.username,
+        verificationRequired: (risk.decision.verification ?? []) as VerificationType[],
+        restrictions: (risk.aggregatedActions.restrictions ?? []) as RestrictionType[],
+        flags: risk.decision.flags ?? [],
+        incomingRiskScore: risk.riskScore,
+        playerSnapshot: {
+          deviceCount: input.Player.deviceCount,
+          ipCountry: input.Player.ipCountry,
+          accountCountry: input.Player.accountCountry,
+          totalDeposits: input.Transaction.totalDeposits,
+          depositCount: input.Transaction.depositCount,
+          withdrawalCount: input.Transaction.withdrawalCount,
+          lastDepositTimestamp: input.Behavior.lastDepositTimestamp,
+          lastBetTimestamp: input.Behavior.lastBetTimestamp,
+          betCountLastMinute: input.Behavior.betCountLastMinute,
+          bonusesUsed: input.Behavior.bonusesUsed,
+        },
+      });
     }
 
     setMessage("Action successful");
