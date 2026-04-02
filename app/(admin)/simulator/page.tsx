@@ -238,6 +238,7 @@ export default function SimulatorPage() {
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
       flags: engineResult.finalDecision.flags,
+      incomingRiskScore: engineResult.riskScore,
       playerSnapshot: {
         deviceCount: simulation.deviceCount,
         ipCountry: simulation.ipCountry,

@@ -32,6 +32,9 @@ export type Player = {
   lastBetTimestamp: number;
   betCountLastMinute: number;
   bonusesUsed: number;
+  riskScore: number;
+  riskHistory: number[];
+  lastRiskUpdate: number;
 };
 
 export type SelfExclusionDuration = "24h" | "7d" | "30d" | "permanent";
@@ -42,6 +45,7 @@ type ApplyTriggerInput = {
   verificationRequired: VerificationType[];
   restrictions: RestrictionType[];
   flags?: string[];
+  incomingRiskScore?: number;
   playerSnapshot?: Partial<
     Pick<
       Player,
@@ -159,6 +163,12 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
             lastBetTimestamp: Number(player.lastBetTimestamp ?? 0),
             betCountLastMinute: Number(player.betCountLastMinute ?? 0),
             bonusesUsed: Number(player.bonusesUsed ?? 0),
+            riskScore: Number(player.riskScore ?? 0),
+            riskHistory: Array.isArray(player.riskHistory)
+              ? player.riskHistory.map((x) => Number(x)).filter((x) => Number.isFinite(x))
+              : [],
+            lastRiskUpdate:
+              typeof player.lastRiskUpdate === "number" ? player.lastRiskUpdate : 0,
           }))
         : [];
       setPlayers(normalizedPlayers);
@@ -200,6 +210,9 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       lastBetTimestamp: 0,
       betCountLastMinute: 0,
       bonusesUsed: 0,
+      riskScore: 0,
+      riskHistory: [],
+      lastRiskUpdate: 0,
     };
 
     const newLevel = getKycLevel(input.verificationRequired);
@@ -207,6 +220,13 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       levelRank[newLevel] > levelRank[current.kycLevel]
         ? newLevel
         : current.kycLevel;
+
+    const previousRisk = current.riskScore || 0;
+    const newRisk = input.incomingRiskScore || 0;
+    const finalRisk = Math.min(
+      100,
+      Math.round(newRisk * 0.7 + previousRisk * 0.3)
+    );
 
     const mergedRestrictions = Array.from(
       new Set<RestrictionType>([...current.restrictions, ...input.restrictions])
@@ -242,6 +262,9 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       betCountLastMinute:
         input.playerSnapshot?.betCountLastMinute ?? current.betCountLastMinute,
       bonusesUsed: input.playerSnapshot?.bonusesUsed ?? current.bonusesUsed,
+      riskScore: finalRisk,
+      riskHistory: [...(current.riskHistory || []), newRisk],
+      lastRiskUpdate: Date.now(),
     };
 
     setPlayers((currentPlayers) => {
@@ -297,6 +320,9 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       lastBetTimestamp: 0,
       betCountLastMinute: 0,
       bonusesUsed: 0,
+      riskScore: 0,
+      riskHistory: [],
+      lastRiskUpdate: 0,
     };
     const selfExclusionUntil =
       input.duration === "permanent" ? null : now + durationMsByValue[input.duration];

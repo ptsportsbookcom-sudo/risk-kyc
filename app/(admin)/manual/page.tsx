@@ -159,6 +159,7 @@ export default function ManualTriggerPage() {
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
       flags: finalFlags,
+      incomingRiskScore: result.riskScore,
       playerSnapshot: {
         deviceCount: input.Player.deviceCount,
         ipCountry: input.Player.ipCountry,
