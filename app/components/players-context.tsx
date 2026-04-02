@@ -221,6 +221,37 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
         ? newLevel
         : current.kycLevel;
 
+    const kycPriority: Record<KycLevel, number> = {
+      L0: 0,
+      L1: 1,
+      L2: 2,
+      L3: 3,
+    };
+
+    function getMaxKyc(a: KycLevel, b: KycLevel) {
+      return kycPriority[a] > kycPriority[b] ? a : b;
+    }
+
+    const currentKyc = current.kycLevel || "L0";
+    const incomingRiskScore = input.incomingRiskScore ?? 0;
+    let nextKyc: KycLevel = nextLevel;
+
+    // Lifecycle progression based on activity present in the snapshot.
+    // Deposit signal -> at least L1
+    if ((input.playerSnapshot?.depositCount ?? 0) > 0) {
+      nextKyc = getMaxKyc(nextKyc, "L1");
+    }
+
+    // Withdrawal signal -> at least L2
+    if ((input.playerSnapshot?.withdrawalCount ?? 0) > 0) {
+      nextKyc = getMaxKyc(nextKyc, "L2");
+    }
+
+    // High risk -> L3
+    if (incomingRiskScore >= 60) {
+      nextKyc = getMaxKyc(nextKyc, "L3");
+    }
+
     const previousRisk = current.riskScore || 0;
     const newRisk = input.incomingRiskScore || 0;
     const finalRisk = Math.min(
@@ -239,8 +270,8 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
     const updatedPlayer: Player = {
       ...current,
       username: input.username || current.username,
-      kycLevel: nextLevel,
-      limits: getLimitsForLevel(nextLevel),
+      kycLevel: nextKyc ?? currentKyc,
+      limits: getLimitsForLevel(nextKyc ?? currentKyc),
       restriction: current.isSelfExcluded
         ? "Full Account Block"
         : input.restrictions[0] ?? current.restriction,
