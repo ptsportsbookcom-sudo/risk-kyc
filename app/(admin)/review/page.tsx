@@ -3,11 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  KycCase,
   ReviewStatus,
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+
+type KycCaseWithRisk = KycCase & { riskScore?: number };
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -173,7 +176,7 @@ export default function ReviewPage() {
                   Restrictions
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Risk Score
+                  Risk
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Actions
@@ -184,8 +187,13 @@ export default function ReviewPage() {
               {filteredRows.map((row) => {
                 const player = getPlayerById(row.userId);
                 const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? null;
+                const c = row as KycCaseWithRisk;
+                const ruleCount = c.triggeredRules?.length || 0;
+                const signalCount = c.fraudFlags?.length || 0;
+                const ruleScore = ruleCount * 15;
+                const signalScore = signalCount * 20;
                 const displayRiskScore =
-                  typeof row.riskScore === "number" ? row.riskScore : 0;
+                  typeof c.riskScore === "number" ? c.riskScore : 0;
                 const riskColorClass = getRiskColorClass(displayRiskScore);
                 return (
                 <tr
@@ -256,16 +264,42 @@ export default function ReviewPage() {
                       <span className="text-slate-500">None</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`font-semibold ${riskColorClass}`}>
-                      {`${displayRiskScore} (${displayRiskScore < 30 ? "Low" : displayRiskScore < 70 ? "Medium" : "High"})`}
-                    </span>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Fraud Signals: {row.fraudFlags?.join(", ") || "None"}
+                  <td
+                    className="px-4 py-3 text-sm text-slate-700 align-top"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className={`font-semibold ${riskColorClass}`}>
+                      Risk Score: {displayRiskScore}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Triggered Rules:{" "}
-                      {row.triggeredRules?.map((rule) => rule.name).join(", ") || "None"}
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Breakdown
+                    </p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+                      <li>
+                        Rules: {ruleCount} → {ruleScore}
+                      </li>
+                      <li>
+                        Fraud Signals: {signalCount} → {signalScore}
+                      </li>
+                    </ul>
+                    <p className="mt-2 text-[11px] leading-snug text-slate-500">
+                      Risk Score = Rules × 15 + Fraud Signals × 20 (max 100)
+                    </p>
+                    <p className="mt-3 text-xs font-semibold text-slate-600">
+                      Fraud Signals:
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      {c.fraudFlags?.length
+                        ? c.fraudFlags.join(", ")
+                        : "None"}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-slate-600">
+                      Triggered Rules:
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      {c.triggeredRules?.length
+                        ? c.triggeredRules.map((r) => r.name).join(", ")
+                        : "None"}
                     </p>
                   </td>
                   <td className="px-4 py-3">
@@ -306,8 +340,13 @@ export default function ReviewPage() {
             const player = getPlayerById(row.userId);
             const resolvedRestriction = player?.restriction ?? row.restrictions?.[0] ?? "None";
             const flags = row.flags && row.flags.length > 0 ? row.flags.join(", ") : "None";
+            const c = row as KycCaseWithRisk;
+            const ruleCount = c.triggeredRules?.length || 0;
+            const signalCount = c.fraudFlags?.length || 0;
+            const ruleScore = ruleCount * 15;
+            const signalScore = signalCount * 20;
             const displayRiskScore =
-              typeof row.riskScore === "number" ? row.riskScore : 0;
+              typeof c.riskScore === "number" ? c.riskScore : 0;
             const riskColorClass = getRiskColorClass(displayRiskScore);
             return (
               <article
@@ -318,18 +357,40 @@ export default function ReviewPage() {
                 <p className="text-sm font-semibold text-slate-900">{row.userId}</p>
                 <p className="text-sm text-slate-700">Status: {row.status}</p>
                 <p className="text-sm text-slate-700">KYC Level: {row.kycLevel}</p>
-                <p className={`text-sm font-semibold ${riskColorClass}`}>
-                  Risk Score:{" "}
-                  {`${displayRiskScore} (${displayRiskScore < 30 ? "Low" : displayRiskScore < 70 ? "Medium" : "High"})`}
-                </p>
+                <div
+                  className="space-y-1 border-t border-slate-200 pt-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className={`text-sm font-semibold ${riskColorClass}`}>
+                    Risk Score: {displayRiskScore}
+                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Breakdown
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+                    <li>
+                      Rules: {ruleCount} → {ruleScore}
+                    </li>
+                    <li>
+                      Fraud Signals: {signalCount} → {signalScore}
+                    </li>
+                  </ul>
+                  <p className="text-[11px] leading-snug text-slate-500">
+                    Risk Score = Rules × 15 + Fraud Signals × 20 (max 100)
+                  </p>
+                  <p className="text-xs font-semibold text-slate-600">Fraud Signals:</p>
+                  <p className="text-xs text-slate-600">
+                    {c.fraudFlags?.length ? c.fraudFlags.join(", ") : "None"}
+                  </p>
+                  <p className="text-xs font-semibold text-slate-600">Triggered Rules:</p>
+                  <p className="text-xs text-slate-600">
+                    {c.triggeredRules?.length
+                      ? c.triggeredRules.map((r) => r.name).join(", ")
+                      : "None"}
+                  </p>
+                </div>
                 <p className="text-sm text-slate-700">Flags: {flags}</p>
                 <p className="text-sm text-slate-700">Restriction: {resolvedRestriction}</p>
-                <p className="text-xs text-slate-500">
-                  Fraud Signals: {row.fraudFlags?.join(", ") || "None"}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Triggered Rules: {row.triggeredRules?.map((rule) => rule.name).join(", ") || "None"}
-                </p>
               </article>
             );
           })}
