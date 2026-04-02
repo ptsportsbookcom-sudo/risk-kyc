@@ -17,6 +17,7 @@ import {
   SelfExclusionDuration,
   usePlayers,
 } from "@/app/components/players-context";
+import { getKycLevel } from "@/app/components/kyc-levels";
 import { EventType, RestrictionType, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
@@ -27,7 +28,10 @@ type SimulationResult = {
   aggregatedRestrictions: string;
   aggregatedFlags: string;
   finalVerification: string;
+  /** Engine recommendation (`finalDecision.kycLevel`). */
   finalKycLevel: string;
+  /** Player KYC after applying trigger (authoritative). */
+  playerKycLevel: string;
   finalRestriction: string;
   finalFlags: string;
   detectedFraudSignals: string;
@@ -94,6 +98,7 @@ const initialResult: SimulationResult = {
   aggregatedFlags: "None",
   finalVerification: "None",
   finalKycLevel: "L0",
+  playerKycLevel: "",
   finalRestriction: "None",
   finalFlags: "None",
   detectedFraudSignals: "None",
@@ -227,7 +232,8 @@ export default function SimulatorPage() {
           engineResult.finalDecision.verification.length > 0
             ? engineResult.finalDecision.verification.join(", ")
             : "None",
-        finalKycLevel: "L0",
+        finalKycLevel: engineResult.finalDecision.kycLevel,
+        playerKycLevel: "",
         finalRestriction: "None",
         finalFlags:
           engineResult.finalDecision.flags.length > 0
@@ -266,6 +272,7 @@ export default function SimulatorPage() {
       restrictions: finalRestrictions,
       flags: engineResult.finalDecision.flags,
       incomingRiskScore: engineResult.riskScore,
+      recommendedKyc: engineResult.finalDecision.kycLevel,
       playerSnapshot: {
         deviceCount: simulation.deviceCount,
         ipCountry: simulation.ipCountry,
@@ -290,8 +297,9 @@ export default function SimulatorPage() {
         userId: normalizedUserId,
         username: normalizedUsername,
         verificationRequired: finalVerifications,
-        kycLevel: resolvedKycLevel,
-        restrictions: triggerResult.appliedRestrictions,
+        kycLevel: triggerResult.player.kycLevel,
+        recommendedKycLevel: resolvedKycLevel,
+        restrictions: finalRestrictions,
         flags: engineResult.finalDecision.flags,
         triggeredRules: engineResult.triggeredRules,
         fraudFlags: engineResult.detectedFraudSignals,
@@ -335,6 +343,7 @@ export default function SimulatorPage() {
           ? engineResult.finalDecision.verification.join(", ")
           : "None",
       finalKycLevel: engineResult.finalDecision.kycLevel,
+      playerKycLevel: triggerResult.player.kycLevel,
       finalRestriction: engineResult.finalDecision.restriction ?? "None",
       finalFlags:
         engineResult.finalDecision.flags.length > 0
@@ -542,7 +551,8 @@ export default function SimulatorPage() {
         username: `bulk_player_${resultItem.scenario.id.toLowerCase()}`,
         verificationRequired: (resultItem.finalDecision.verification ??
           []) as VerificationType[],
-        kycLevel: resultItem.finalDecision.kycLevel,
+        kycLevel: getKycLevel(resultItem.finalDecision.verification ?? []),
+        recommendedKycLevel: resultItem.finalDecision.kycLevel,
         restrictions: resultItem.finalDecision.restriction
           ? [resultItem.finalDecision.restriction as RestrictionType]
           : [],
@@ -1021,7 +1031,7 @@ export default function SimulatorPage() {
                   Fraud Flags: {item.fraudFlags.length > 0 ? item.fraudFlags.join(", ") : "None"}
                 </p>
                 <p className="mt-1 text-sm text-slate-700">
-                  Final KYC Level: {item.finalDecision.kycLevel}
+                  Recommended KYC (engine): {item.finalDecision.kycLevel}
                 </p>
                 <p className={`mt-1 text-sm font-semibold ${riskColor}`}>
                   Risk Score: {score} ({riskLabel})
@@ -1187,7 +1197,14 @@ export default function SimulatorPage() {
           </p>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             <ResultItem label="Verification" value={result.finalVerification} />
-            <ResultItem label="Final KYC Level" value={result.finalKycLevel} />
+            <ResultItem
+              label="Recommended KYC (engine)"
+              value={result.finalKycLevel}
+            />
+            <ResultItem
+              label="Player KYC (authoritative)"
+              value={result.playerKycLevel || "—"}
+            />
             <ResultItem label="Restriction" value={result.finalRestriction} />
             <ResultItem label="Flags" value={result.finalFlags} />
           </div>

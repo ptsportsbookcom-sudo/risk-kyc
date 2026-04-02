@@ -153,13 +153,14 @@ export default function ManualTriggerPage() {
       ? (result.aggregatedActions.restrictions as RestrictionType[])
       : restrictions;
 
-    applyTriggerToPlayer({
+    const triggerResult = applyTriggerToPlayer({
       id: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
       flags: finalFlags,
       incomingRiskScore: result.riskScore,
+      recommendedKyc: result.finalDecision.kycLevel,
       playerSnapshot: {
         deviceCount: input.Player.deviceCount,
         ipCountry: input.Player.ipCountry,
@@ -178,7 +179,8 @@ export default function ManualTriggerPage() {
       userId: normalizedUserId,
       username: normalizedUsername,
       verificationRequired: finalVerifications,
-      kycLevel: result.finalDecision.kycLevel,
+      kycLevel: triggerResult.player.kycLevel,
+      recommendedKycLevel: result.finalDecision.kycLevel,
       restrictions: finalRestrictions,
       flags: finalFlags,
       triggeredRules: [...(result.triggeredRules || [])],
@@ -461,6 +463,14 @@ export default function ManualTriggerPage() {
             <PreviewItem
               label="Risk Score"
               value={String(manualResult.riskScore)}
+            />
+            <PreviewItem
+              label="Recommended KYC (engine)"
+              value={manualResult.finalDecision.kycLevel}
+            />
+            <PreviewItem
+              label="Note"
+              value="Player KYC = lifecycle + risk escalation only. Engine level = recommendation."
             />
           </div>
         </section>

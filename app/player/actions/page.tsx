@@ -190,6 +190,7 @@ export default function PlayerActionsPage() {
         restrictions: (risk.aggregatedActions.restrictions ?? []) as RestrictionType[],
         flags: risk.decision.flags ?? [],
         incomingRiskScore: risk.riskScore,
+        recommendedKyc: risk.decision.kycLevel,
         playerSnapshot: {
           deviceCount: input.Player.deviceCount,
           ipCountry: input.Player.ipCountry,
@@ -220,11 +221,19 @@ export default function PlayerActionsPage() {
 
         <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
           <p>
-            Player level:{" "}
+            Current KYC (player):{" "}
             <span className="font-semibold text-slate-900">
               {player?.kycLevel ?? "L0"}
             </span>
           </p>
+          {player?.recommendedKycLevel ? (
+            <p className="text-xs text-slate-600">
+              Recommended (engine):{" "}
+              <span className="font-medium text-slate-800">
+                {player.recommendedKycLevel}
+              </span>
+            </p>
+          ) : null}
           <p>
             Max deposit:{" "}
             <span className="font-semibold text-slate-900">

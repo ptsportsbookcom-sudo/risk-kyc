@@ -40,6 +40,8 @@ export type KycCase = {
   username: string;
   verificationRequired: VerificationType[];
   kycLevel: KycLevel;
+  /** Engine `finalDecision.kycLevel` at case creation — recommendation only. */
+  recommendedKycLevel?: KycLevel;
   status: ReviewStatus;
   createdDate: string;
   createdAt?: string;
@@ -69,6 +71,7 @@ type CreateKycCaseInput = {
   username: string;
   verificationRequired: VerificationType[];
   kycLevel?: KycLevel;
+  recommendedKycLevel?: KycLevel;
   restrictions: string[];
   flags?: string[];
   source?: "manual" | "simulation" | "self-exclusion";
@@ -116,6 +119,12 @@ const KycCasesContext = createContext<KycCasesContextValue | undefined>(undefine
 const KYC_CASES_STORAGE_KEY = "kyc_cases";
 const KYC_AUDIT_LOGS_STORAGE_KEY = "kyc_audit_logs";
 const ALL_DOCUMENT_TYPES: DocumentType[] = ["ID", "Selfie", "Proof"];
+
+function parseOptionalKycLevel(raw: unknown): KycLevel | undefined {
+  if (typeof raw !== "string") return undefined;
+  if (raw === "L0" || raw === "L1" || raw === "L2" || raw === "L3") return raw;
+  return undefined;
+}
 
 function getRequiredDocumentTypes(verificationRequired: VerificationType[]) {
   if (verificationRequired.includes("Full KYC")) {
@@ -180,6 +189,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
             normalizeRestrictionsForStatus({
               ...kycCase,
               kycLevel: kycCase.kycLevel ?? getKycLevel(kycCase.verificationRequired ?? []),
+              recommendedKycLevel: parseOptionalKycLevel(kycCase.recommendedKycLevel),
               status: (kycCase.status ?? "Pending") as ReviewStatus,
               flags: Array.isArray(kycCase.flags) ? kycCase.flags : [],
               notes: Array.isArray(kycCase.notes) ? kycCase.notes : [],
@@ -246,6 +256,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         username: input.username,
         verificationRequired: input.verificationRequired,
         kycLevel: input.kycLevel ?? getKycLevel(input.verificationRequired),
+        recommendedKycLevel: input.recommendedKycLevel,
         status: input.status ?? "Pending",
         createdDate,
         createdAt: input.createdAt ?? now.toISOString(),

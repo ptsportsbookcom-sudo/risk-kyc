@@ -113,8 +113,16 @@ export default function CaseDetailsPage() {
           <InfoItem label="User ID" value={selectedCase.userId} />
           <InfoItem label="Username" value={selectedCase.username} />
           <InfoItem
-            label="KYC Level"
-            value={player?.kycLevel ?? "N/A"}
+            label="Current KYC (player)"
+            value={player?.kycLevel ?? selectedCase.kycLevel}
+          />
+          <InfoItem
+            label="Recommended KYC (engine)"
+            value={
+              selectedCase.recommendedKycLevel ??
+              selectedCase.finalDecision?.kycLevel ??
+              "—"
+            }
           />
           <InfoItem label="Created date" value={selectedCase.createdDate} />
         </div>

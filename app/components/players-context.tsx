@@ -3,7 +3,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { RestrictionType } from "@/app/components/rules-context";
 import { VerificationType } from "@/app/components/kyc-cases-context";
-import { getKycLevel, KycLevel } from "@/app/components/kyc-levels";
+import { KycLevel, maxKycLevel } from "@/app/components/kyc-levels";
 
 export type PlayerLimits = {
   maxDeposit: number | null;
@@ -11,10 +11,21 @@ export type PlayerLimits = {
   canPlayCasino: boolean;
 };
 
+const KYC_LEVEL_LITERALS: readonly KycLevel[] = ["L0", "L1", "L2", "L3"];
+
+function parseKycLevel(raw: unknown): KycLevel | null {
+  if (typeof raw !== "string") return null;
+  return (KYC_LEVEL_LITERALS as readonly string[]).includes(raw)
+    ? (raw as KycLevel)
+    : null;
+}
+
 export type Player = {
   id: string;
   username: string;
   kycLevel: KycLevel;
+  /** Last engine `finalDecision.kycLevel` — informational only; limits use `kycLevel`. */
+  recommendedKycLevel?: KycLevel | null;
   limits: PlayerLimits;
   restriction: RestrictionType | null;
   restrictions: RestrictionType[];
@@ -113,6 +124,8 @@ type ApplyTriggerInput = {
   restrictions: RestrictionType[];
   flags?: string[];
   incomingRiskScore?: number;
+  /** Engine output only; does not directly set player `kycLevel`. */
+  recommendedKyc?: KycLevel | null;
   playerSnapshot?: Partial<
     Pick<
       Player,
@@ -168,12 +181,6 @@ function normalizeRestrictionList(raw: unknown): RestrictionType[] {
 }
 
 const PLAYERS_STORAGE_KEY = "kyc_players";
-const levelRank: Record<KycLevel, number> = {
-  L0: 0,
-  L1: 1,
-  L2: 2,
-  L3: 3,
-};
 
 export function getLimitsForLevel(kycLevel: KycLevel): PlayerLimits {
   if (kycLevel === "L3") {
@@ -230,6 +237,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
             return {
             ...player,
             limits: getLimitsForLevel(player.kycLevel),
+            recommendedKycLevel: parseKycLevel(player.recommendedKycLevel) ?? null,
             restriction,
             restrictions,
             isSelfExcluded: Boolean(player.isSelfExcluded ?? false),
@@ -280,6 +288,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       id: input.id,
       username: input.username,
       kycLevel: "L0",
+      recommendedKycLevel: null,
       limits: getLimitsForLevel("L0"),
       restriction: null,
       restrictions: [],
@@ -302,42 +311,20 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       lastRiskUpdate: 0,
     };
 
-    const newLevel = getKycLevel(input.verificationRequired);
-    const nextLevel =
-      levelRank[newLevel] > levelRank[current.kycLevel]
-        ? newLevel
-        : current.kycLevel;
-
-    const kycPriority: Record<KycLevel, number> = {
-      L0: 0,
-      L1: 1,
-      L2: 2,
-      L3: 3,
-    };
-
-    function getMaxKyc(a: KycLevel, b: KycLevel) {
-      return kycPriority[a] > kycPriority[b] ? a : b;
-    }
-
     const currentKyc = current.kycLevel || "L0";
     const incomingRiskScore = input.incomingRiskScore ?? 0;
-    let nextKyc: KycLevel = nextLevel;
 
-    // Lifecycle progression based on activity present in the snapshot.
-    // Deposit signal -> at least L1
+    let lifecycleKyc: KycLevel = "L0";
     if ((input.playerSnapshot?.depositCount ?? 0) > 0) {
-      nextKyc = getMaxKyc(nextKyc, "L1");
+      lifecycleKyc = maxKycLevel([lifecycleKyc, "L1"]);
     }
-
-    // Withdrawal signal -> at least L2
     if ((input.playerSnapshot?.withdrawalCount ?? 0) > 0) {
-      nextKyc = getMaxKyc(nextKyc, "L2");
+      lifecycleKyc = maxKycLevel([lifecycleKyc, "L2"]);
     }
 
-    // High risk -> L3
-    if (incomingRiskScore >= 60) {
-      nextKyc = getMaxKyc(nextKyc, "L3");
-    }
+    const riskBasedKyc: KycLevel = incomingRiskScore >= 60 ? "L3" : "L0";
+
+    const nextKyc = maxKycLevel([currentKyc, lifecycleKyc, riskBasedKyc]);
 
     const previousRisk = current.riskScore || 0;
     const newRisk = input.incomingRiskScore || 0;
@@ -362,6 +349,8 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       ...current,
       username: input.username || current.username,
       kycLevel: nextKyc ?? currentKyc,
+      recommendedKycLevel:
+        input.recommendedKyc !== undefined ? input.recommendedKyc : current.recommendedKycLevel ?? null,
       limits: getLimitsForLevel(nextKyc ?? currentKyc),
       restriction: current.isSelfExcluded
         ? "Full Account Block"
@@ -402,7 +391,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
 
     return {
       player: updatedPlayer,
-      levelChanged: nextLevel !== current.kycLevel,
+      levelChanged: nextKyc !== current.kycLevel,
       newRestrictionsApplied: appliedRestrictions.length > 0,
       appliedRestrictions,
     };
@@ -425,6 +414,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       id: input.id,
       username: input.username,
       kycLevel: "L0",
+      recommendedKycLevel: null,
       limits: getLimitsForLevel("L0"),
       restriction: null,
       restrictions: [],

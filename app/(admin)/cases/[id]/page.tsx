@@ -97,7 +97,20 @@ export default function CaseManagementDetailPage() {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <InfoItem label="User ID" value={selectedCase.userId} />
           <InfoItem label="Status" value={selectedCase.status} />
-          <InfoItem label="KYC Level" value={selectedCase.kycLevel} />
+          <InfoItem
+            label="Current KYC (case / player record)"
+            value={
+              player?.kycLevel ?? selectedCase.kycLevel
+            }
+          />
+          <InfoItem
+            label="Recommended KYC (engine)"
+            value={
+              selectedCase.recommendedKycLevel ??
+              selectedCase.finalDecision?.kycLevel ??
+              "—"
+            }
+          />
           <InfoItem label="Restriction (primary)" value={resolvedRestriction} />
           <InfoItem label="Active restrictions" value={activeRestrictionsText} />
           <InfoItem

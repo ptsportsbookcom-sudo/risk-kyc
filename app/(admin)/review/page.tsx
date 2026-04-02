@@ -98,9 +98,6 @@ export default function ReviewPage() {
           : Array.isArray(verificationRequired)
             ? verificationRequired.includes(verificationFilter)
             : verificationRequired === verificationFilter;
-      const matchesUsername = row.username
-        .toLowerCase()
-        .includes(usernameQuery.toLowerCase().trim());
 
       const query = usernameQuery.toLowerCase().trim();
       const matchesSearch =
@@ -273,7 +270,7 @@ export default function ReviewPage() {
                   Verification Type
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  KYC Level
+                  KYC (current / rec.)
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Status
@@ -351,7 +348,19 @@ export default function ReviewPage() {
                       : row.verificationRequired ?? "None"}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-700">
-                    {row.kycLevel}
+                    <div>
+                      Current:{" "}
+                      <span className="font-medium">
+                        {player?.kycLevel ?? row.kycLevel}
+                      </span>
+                    </div>
+                    {row.recommendedKycLevel ||
+                    row.finalDecision?.kycLevel ? (
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        Recommended:{" "}
+                        {row.recommendedKycLevel ?? row.finalDecision?.kycLevel}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span
@@ -532,7 +541,15 @@ export default function ReviewPage() {
               >
                 <p className="text-sm font-semibold text-slate-900">{row.userId}</p>
                 <p className="text-sm text-slate-700">Status: {row.status}</p>
-                <p className="text-sm text-slate-700">KYC Level: {row.kycLevel}</p>
+                <p className="text-sm text-slate-700">
+                  Current KYC: {player?.kycLevel ?? row.kycLevel}
+                </p>
+                {row.recommendedKycLevel || row.finalDecision?.kycLevel ? (
+                  <p className="text-xs text-slate-500">
+                    Recommended (engine):{" "}
+                    {row.recommendedKycLevel ?? row.finalDecision?.kycLevel}
+                  </p>
+                ) : null}
                 <div
                   className="space-y-1 border-t border-slate-200 pt-2"
                   onClick={(e) => e.stopPropagation()}
