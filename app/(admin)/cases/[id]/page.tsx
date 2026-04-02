@@ -50,6 +50,9 @@ export default function CaseManagementDetailPage() {
 
   const player = getPlayerById(selectedCase.userId);
   const resolvedRestriction = player?.restriction ?? selectedCase.restrictions?.[0] ?? "None";
+  const activeRestrictionsText = player?.restrictions?.length
+    ? player.restrictions.join(", ")
+    : "None";
   const decisionFlags = selectedCase.flags ?? [];
   const triggeredRules = selectedCase.triggeredRules ?? [];
   const fraudFlags = selectedCase.fraudFlags ?? selectedCase.flags ?? [];
@@ -95,7 +98,8 @@ export default function CaseManagementDetailPage() {
           <InfoItem label="User ID" value={selectedCase.userId} />
           <InfoItem label="Status" value={selectedCase.status} />
           <InfoItem label="KYC Level" value={selectedCase.kycLevel} />
-          <InfoItem label="Restriction" value={resolvedRestriction} />
+          <InfoItem label="Restriction (primary)" value={resolvedRestriction} />
+          <InfoItem label="Active restrictions" value={activeRestrictionsText} />
           <InfoItem
             label="Flags"
             value={decisionFlags.length > 0 ? decisionFlags.join(", ") : "None"}

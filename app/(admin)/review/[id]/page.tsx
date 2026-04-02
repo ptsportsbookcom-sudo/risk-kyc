@@ -83,7 +83,8 @@ export default function CaseDetailsPage() {
 
   const requiredDocuments = getRequiredDocumentTypes(selectedCase.verificationRequired);
   const player = getPlayerById(selectedCase.userId);
-  const currentRestrictions = player?.restrictions ?? selectedCase.restrictions;
+  const activeRestrictions =
+    player !== undefined ? player.restrictions : selectedCase.restrictions;
 
   return (
     <div className="space-y-5">
@@ -141,11 +142,11 @@ export default function CaseDetailsPage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-          3. Restrictions
+          3. Active restrictions (player)
         </h4>
         <div className="mt-3 flex flex-wrap gap-2">
-          {currentRestrictions.length > 0 ? (
-            currentRestrictions.map((restriction) => (
+          {activeRestrictions.length > 0 ? (
+            activeRestrictions.map((restriction) => (
               <span
                 key={restriction}
                 className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${restrictionClass(

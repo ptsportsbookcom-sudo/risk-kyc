@@ -3,14 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { canUserPerformAction } from "@/app/components/enforcement";
 import { useKycCases, VerificationType } from "@/app/components/kyc-cases-context";
-import { usePlayers } from "@/app/components/players-context";
+import {
+  canDeposit,
+  canPlayCasino,
+  canWithdraw,
+  PlayerEnforcementSnapshot,
+  usePlayers,
+} from "@/app/components/players-context";
 import { handleRiskEvent, RiskEventType } from "@/app/components/risk-events";
 import { RestrictionType } from "@/app/components/rules-context";
 import { useRules } from "@/app/components/rules-context";
 
 type PlayerAction = "Deposit" | "Withdraw" | "Play Casino";
+
+function riskEventTimestamp() {
+  return Date.now();
+}
+
 const restrictionValues: RestrictionType[] = [
   "Deposit Block",
   "Withdrawal Block",
@@ -18,53 +28,60 @@ const restrictionValues: RestrictionType[] = [
   "Full Account Block",
 ];
 
-function toRestrictionType(value: string | null | undefined): RestrictionType | null {
-  if (!value) return null;
-  return restrictionValues.includes(value as RestrictionType)
-    ? (value as RestrictionType)
-    : null;
-}
-
 export default function PlayerActionsPage() {
   const router = useRouter();
   const { cases } = useKycCases();
   const { rules } = useRules();
-  const { clearExpiredSelfExclusion, getPlayerById, applyTriggerToPlayer } = usePlayers();
+  const {
+    clearExpiredSelfExclusion,
+    getPlayerById,
+    applyTriggerToPlayer,
+  } = usePlayers();
   const [message, setMessage] = useState("");
   const [depositAmount, setDepositAmount] = useState("50");
 
   const pendingCase = cases.find((item) => item.status === "Pending");
   const player = pendingCase ? getPlayerById(pendingCase.userId) : undefined;
-  const restriction: RestrictionType | null =
-    player?.restriction ?? toRestrictionType(pendingCase?.restrictions?.[0]);
 
   const tryAction = (action: PlayerAction) => {
     setMessage("");
     const refreshedPlayer =
       pendingCase?.userId ? clearExpiredSelfExclusion(pendingCase.userId) : player;
-    const enforcementPlayer = {
-      restriction: refreshedPlayer?.restriction ?? restriction,
-      isSelfExcluded: refreshedPlayer?.isSelfExcluded ?? false,
-      selfExclusionUntil: refreshedPlayer?.selfExclusionUntil ?? null,
-    };
+    const livePlayer =
+      refreshedPlayer ??
+      (pendingCase?.userId ? getPlayerById(pendingCase.userId) : undefined);
 
-    if (!canUserPerformAction(enforcementPlayer, "withdrawal") && action === "Withdraw") {
-      setMessage("Action blocked: Complete verification to withdraw.");
-      router.push(
-        "/player?reason=Complete%20verification%20to%20withdraw"
-      );
+    const enforcementSnapshot: PlayerEnforcementSnapshot | null = livePlayer
+      ? {
+          restrictions: livePlayer.restrictions,
+          isSelfExcluded: livePlayer.isSelfExcluded,
+          selfExclusionUntil: livePlayer.selfExclusionUntil,
+        }
+      : pendingCase
+        ? {
+            restrictions: (pendingCase.restrictions ?? []).filter(
+              (r): r is RestrictionType => restrictionValues.includes(r as RestrictionType)
+            ),
+            isSelfExcluded: false,
+            selfExclusionUntil: null,
+          }
+        : null;
+
+    if (!canWithdraw(enforcementSnapshot) && action === "Withdraw") {
+      setMessage("Action blocked: withdrawal restriction or self-exclusion active.");
+      router.push("/player?reason=Withdrawal%20is%20blocked%20for%20this%20account");
       return;
     }
 
-    if (!canUserPerformAction(enforcementPlayer, "deposit") && action === "Deposit") {
-      setMessage("Action blocked: Complete verification to deposit.");
-      router.push("/player?reason=Complete%20verification%20to%20deposit");
+    if (!canDeposit(enforcementSnapshot) && action === "Deposit") {
+      setMessage("Action blocked: deposit restriction or self-exclusion active.");
+      router.push("/player?reason=Deposit%20is%20blocked%20for%20this%20account");
       return;
     }
 
-    if (!canUserPerformAction(enforcementPlayer, "casino") && action === "Play Casino") {
-      setMessage("Action blocked: Complete verification to play casino.");
-      router.push("/player?reason=Complete%20verification%20to%20play%20casino");
+    if (!canPlayCasino(enforcementSnapshot) && action === "Play Casino") {
+      setMessage("Action blocked: casino restriction or self-exclusion active.");
+      router.push("/player?reason=Casino%20play%20is%20blocked%20for%20this%20account");
       return;
     }
 
@@ -95,7 +112,7 @@ export default function PlayerActionsPage() {
     }
 
     if (pendingCase && refreshedPlayer) {
-      const now = Date.now();
+      const now = riskEventTimestamp();
       const parsedDepositAmount = Number(depositAmount || 0);
       const baseInput = {
         Transaction: {
@@ -227,6 +244,14 @@ export default function PlayerActionsPage() {
             <span className="font-semibold text-slate-900">
               {player?.limits.canPlayCasino === false ? "Blocked" : "Allowed"}
             </span>
+          </p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Active restrictions
+          </p>
+          <p className="text-sm text-slate-800">
+            {player?.restrictions?.length
+              ? player.restrictions.join(", ")
+              : "None"}
           </p>
         </div>
 

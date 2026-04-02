@@ -37,6 +37,73 @@ export type Player = {
   lastRiskUpdate: number;
 };
 
+/**
+ * Severity order (lowest → highest): Withdrawal Block, Deposit Block, Casino Block, Full Account Block.
+ * Primary restriction = single highest-severity entry for quick access.
+ */
+export const RESTRICTION_SEVERITY: Record<RestrictionType, number> = {
+  "Withdrawal Block": 1,
+  "Deposit Block": 2,
+  "Casino Block": 3,
+  "Full Account Block": 4,
+};
+
+export function getPrimaryRestriction(
+  restrictions: RestrictionType[]
+): RestrictionType | null {
+  if (!restrictions.length) return null;
+  let best = restrictions[0];
+  let bestRank = RESTRICTION_SEVERITY[best] ?? 0;
+  for (const r of restrictions) {
+    const rank = RESTRICTION_SEVERITY[r] ?? 0;
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = r;
+    }
+  }
+  return best;
+}
+
+export type PlayerEnforcementSnapshot = Pick<
+  Player,
+  "restrictions" | "isSelfExcluded" | "selfExclusionUntil"
+>;
+
+function isSelfExclusionActive(player: PlayerEnforcementSnapshot): boolean {
+  if (!player.isSelfExcluded) return false;
+  if (player.selfExclusionUntil === null || player.selfExclusionUntil === undefined) {
+    return true;
+  }
+  return Date.now() <= player.selfExclusionUntil;
+}
+
+export function canDeposit(player: PlayerEnforcementSnapshot | null | undefined): boolean {
+  if (!player) return true;
+  if (isSelfExclusionActive(player)) return false;
+  const r = player.restrictions ?? [];
+  if (r.includes("Deposit Block")) return false;
+  if (r.includes("Full Account Block")) return false;
+  return true;
+}
+
+export function canWithdraw(player: PlayerEnforcementSnapshot | null | undefined): boolean {
+  if (!player) return true;
+  if (isSelfExclusionActive(player)) return false;
+  const r = player.restrictions ?? [];
+  if (r.includes("Withdrawal Block")) return false;
+  if (r.includes("Full Account Block")) return false;
+  return true;
+}
+
+export function canPlayCasino(player: PlayerEnforcementSnapshot | null | undefined): boolean {
+  if (!player) return true;
+  if (isSelfExclusionActive(player)) return false;
+  const r = player.restrictions ?? [];
+  if (r.includes("Casino Block")) return false;
+  if (r.includes("Full Account Block")) return false;
+  return true;
+}
+
 export type SelfExclusionDuration = "24h" | "7d" | "30d" | "permanent";
 
 type ApplyTriggerInput = {
@@ -80,9 +147,25 @@ type PlayersContextValue = {
     reason: string;
   }) => Player;
   clearExpiredSelfExclusion: (id: string) => Player | undefined;
+  clearRestrictions: (playerId: string) => void;
   getPlayerById: (id: string) => Player | undefined;
   resetPlayers: () => void;
+  canDeposit: typeof canDeposit;
+  canWithdraw: typeof canWithdraw;
+  canPlayCasino: typeof canPlayCasino;
 };
+
+function normalizeRestrictionList(raw: unknown): RestrictionType[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const allowed = new Set<string>(Object.keys(RESTRICTION_SEVERITY));
+  return Array.from(
+    new Set(
+      list.filter(
+        (r): r is RestrictionType => typeof r === "string" && allowed.has(r)
+      )
+    )
+  );
+}
 
 const PLAYERS_STORAGE_KEY = "kyc_players";
 const levelRank: Record<KycLevel, number> = {
@@ -141,11 +224,14 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
 
       const parsedPlayers = JSON.parse(savedPlayers) as Player[];
       const normalizedPlayers = Array.isArray(parsedPlayers)
-        ? parsedPlayers.map((player) => ({
+        ? parsedPlayers.map((player) => {
+            const restrictions = normalizeRestrictionList(player.restrictions);
+            const restriction = getPrimaryRestriction(restrictions);
+            return {
             ...player,
             limits: getLimitsForLevel(player.kycLevel),
-            restriction: (player.restriction as RestrictionType | null) ?? null,
-            restrictions: Array.isArray(player.restrictions) ? player.restrictions : [],
+            restriction,
+            restrictions,
             isSelfExcluded: Boolean(player.isSelfExcluded ?? false),
             selfExclusionReason: player.selfExclusionReason ?? "",
             selfExclusionUntil:
@@ -169,7 +255,8 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
               : [],
             lastRiskUpdate:
               typeof player.lastRiskUpdate === "number" ? player.lastRiskUpdate : 0,
-          }))
+          };
+          })
         : [];
       setPlayers(normalizedPlayers);
     } catch {
@@ -260,7 +347,11 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
     );
 
     const mergedRestrictions = Array.from(
-      new Set<RestrictionType>([...current.restrictions, ...input.restrictions])
+      new Set<RestrictionType>([
+        ...current.restrictions,
+        ...input.restrictions,
+        ...(current.isSelfExcluded ? (["Full Account Block"] as const) : []),
+      ])
     );
     const appliedRestrictions = mergedRestrictions.filter(
       (item) => !current.restrictions.includes(item)
@@ -274,7 +365,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       limits: getLimitsForLevel(nextKyc ?? currentKyc),
       restriction: current.isSelfExcluded
         ? "Full Account Block"
-        : input.restrictions[0] ?? current.restriction,
+        : getPrimaryRestriction(mergedRestrictions),
       restrictions: mergedRestrictions,
       isSelfExcluded: current.isSelfExcluded,
       selfExclusionReason: current.selfExclusionReason,
@@ -358,11 +449,14 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
     const selfExclusionUntil =
       input.duration === "permanent" ? null : now + durationMsByValue[input.duration];
 
+    const mergedSeRestrictions = Array.from(
+      new Set<RestrictionType>([...current.restrictions, "Full Account Block"])
+    );
     const updatedPlayer: Player = {
       ...current,
       username: input.username || current.username,
-      restriction: "Full Account Block",
-      restrictions: Array.from(new Set([...current.restrictions, "Full Account Block"])),
+      restriction: getPrimaryRestriction(mergedSeRestrictions),
+      restrictions: mergedSeRestrictions,
       isSelfExcluded: true,
       selfExclusionReason: input.reason,
       selfExclusionUntil,
@@ -392,7 +486,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
       isSelfExcluded: false,
       selfExclusionReason: "",
       selfExclusionUntil: null,
-      restriction: current.restriction === "Full Account Block" ? null : current.restriction,
+      restriction: getPrimaryRestriction(current.restrictions),
     };
 
     setPlayers((currentPlayers) =>
@@ -400,6 +494,16 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
     );
 
     return updatedPlayer;
+  };
+
+  const clearRestrictions = (playerId: string) => {
+    setPlayers((currentPlayers) =>
+      currentPlayers.map((player) =>
+        player.id === playerId
+          ? { ...player, restrictions: [], restriction: null }
+          : player
+      )
+    );
   };
 
   const getPlayerById = (id: string) => players.find((player) => player.id === id);
@@ -417,8 +521,12 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
         applyTriggerToPlayer,
         applySelfExclusion,
         clearExpiredSelfExclusion,
+        clearRestrictions,
         getPlayerById,
         resetPlayers,
+        canDeposit,
+        canWithdraw,
+        canPlayCasino,
       }}
     >
       {children}

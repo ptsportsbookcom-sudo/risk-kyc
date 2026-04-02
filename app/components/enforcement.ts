@@ -6,6 +6,8 @@ export type ActionType = "deposit" | "withdrawal" | "casino" | "sports";
 
 type EnforcementPlayer = {
   restriction: RestrictionType | null;
+  /** When set and non-empty, overrides `restriction` for checks (source of truth). */
+  restrictions?: RestrictionType[];
   isSelfExcluded?: boolean;
   selfExclusionUntil?: number | null;
 };
@@ -29,6 +31,13 @@ export function checkSelfExclusionExpiry(player: EnforcementPlayer) {
   };
 }
 
+function effectiveRestrictionList(player: EnforcementPlayer): RestrictionType[] {
+  if (player.restrictions && player.restrictions.length > 0) {
+    return player.restrictions;
+  }
+  return player.restriction ? [player.restriction] : [];
+}
+
 export function canUserPerformAction(
   player: EnforcementPlayer | null | undefined,
   action: ActionType
@@ -36,13 +45,13 @@ export function canUserPerformAction(
   const checkedPlayer = player ? checkSelfExclusionExpiry(player) : null;
   if (checkedPlayer?.isSelfExcluded) return false;
 
-  const restriction = checkedPlayer?.restriction ?? null;
+  const list = checkedPlayer ? effectiveRestrictionList(checkedPlayer) : [];
 
-  if (restriction === "Full Account Block") return false;
-  if (restriction === "Deposit Block" && action === "deposit") return false;
-  if (restriction === "Withdrawal Block" && action === "withdrawal") return false;
+  if (list.includes("Full Account Block")) return false;
+  if (list.includes("Deposit Block") && action === "deposit") return false;
+  if (list.includes("Withdrawal Block") && action === "withdrawal") return false;
   if (
-    restriction === "Casino Block" &&
+    list.includes("Casino Block") &&
     (action === "casino" || action === "sports")
   ) {
     return false;
