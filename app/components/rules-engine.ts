@@ -309,29 +309,49 @@ export function resolveDecision(input: {
       (left, right) => (priorityOrder[right] ?? 0) - (priorityOrder[left] ?? 0)
     )[0] ?? null;
   const uniqueRestrictions = Array.from(new Set(restrictions));
-  let finalVerification =
-    highestVerification ??
-    (input.triggeredRules.length > 0 || input.fraudFlags.length > 0 ? "ID" : null);
-  let finalRestriction = uniqueRestrictions[0] ?? null;
+  const scoreBasedVerification: string | null =
+    input.riskScore >= 60 ? "Full KYC" : input.riskScore >= 40 ? "ID" : null;
 
-  if (input.riskScore >= 80) {
-    finalVerification = "Full KYC";
-    finalRestriction = "Full Account Block";
-  } else if (input.riskScore >= 60) {
-    finalVerification = "Selfie";
-    finalRestriction = finalRestriction ?? "Withdrawal Block";
-  } else if (input.riskScore >= 40) {
-    finalVerification = "ID";
-  }
+  const scoreBasedRestrictions: string[] =
+    input.riskScore >= 80
+      ? uniqueRestrictions.includes("Full Account Block")
+        ? ["Full Account Block"]
+        : ["Withdrawal Block", "Deposit Block", "Casino Block"]
+      : input.riskScore >= 60
+        ? ["Withdrawal Block"]
+        : [];
+
+  const finalVerificationCandidates = [highestVerification, scoreBasedVerification].filter(
+    (v): v is string => typeof v === "string" && v.length > 0
+  );
+  const finalVerification: string | null =
+    finalVerificationCandidates.length > 0
+      ? finalVerificationCandidates.sort(
+          (left, right) => (priorityOrder[right] ?? 0) - (priorityOrder[left] ?? 0)
+        )[0] ?? null
+      : null;
+
+  const finalRestrictions = Array.from(
+    new Set([...uniqueRestrictions, ...scoreBasedRestrictions])
+  );
+
+  const restrictionPriority = [
+    "Full Account Block",
+    "Casino Block",
+    "Deposit Block",
+    "Withdrawal Block",
+  ];
+  const finalRestriction =
+    restrictionPriority.find((r) => finalRestrictions.includes(r)) ??
+    finalRestrictions[0] ??
+    null;
 
   const finalKycLevel: "L0" | "L1" | "L2" | "L3" =
-    finalVerification === "Full KYC"
+    input.riskScore >= 60
       ? "L3"
-      : finalVerification === "Selfie"
+      : input.riskScore >= 40
         ? "L2"
-        : finalVerification === "ID"
-          ? "L1"
-          : "L0";
+        : "L1";
 
   const uniqueFlags = Array.from(new Set(flags));
   const mergedVerifications = Array.from(
@@ -342,9 +362,7 @@ export function resolveDecision(input: {
   );
   const aggregatedActions = {
     verifications: mergedVerifications,
-    restrictions: Array.from(
-      new Set(finalRestriction ? [finalRestriction, ...uniqueRestrictions] : uniqueRestrictions)
-    ),
+    restrictions: finalRestrictions,
     flags: uniqueFlags,
   };
 
