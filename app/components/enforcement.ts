@@ -1,62 +1,81 @@
 "use client";
 
+import {
+  canDeposit as playerCanDeposit,
+  canPlayCasino as playerCanPlayCasino,
+  canWithdraw as playerCanWithdraw,
+  type PlayerEnforcementSnapshot,
+} from "@/app/components/players-context";
 import { RestrictionType } from "@/app/components/rules-context";
 
 export type ActionType = "deposit" | "withdrawal" | "casino" | "sports";
 
-type EnforcementPlayer = {
-  restriction: RestrictionType | null;
-  /** When set and non-empty, overrides `restriction` for checks (source of truth). */
-  restrictions?: RestrictionType[];
-  isSelfExcluded?: boolean;
-  selfExclusionUntil?: number | null;
+/**
+ * Enforcement uses only `restrictions` + self-exclusion fields.
+ * `restriction` (singular) is optional and display-only; omit it for new call sites.
+ */
+export type EnforcementCheckInput = PlayerEnforcementSnapshot & {
+  restriction?: RestrictionType | null;
 };
 
-export function checkSelfExclusionExpiry(player: EnforcementPlayer) {
+function warnIfSingularRestrictionWithoutArray(input: EnforcementCheckInput | null | undefined) {
+  if (process.env.NODE_ENV !== "development" || !input) return;
+  if (
+    input.restriction != null &&
+    input.restriction !== undefined &&
+    (!input.restrictions || input.restrictions.length === 0)
+  ) {
+    console.warn(
+      "[enforcement] Singular `restriction` passed without `restrictions`. Enforcement uses only `player.restrictions`; update the call site."
+    );
+  }
+}
+
+export function checkSelfExclusionExpiry(
+  player: EnforcementCheckInput
+): PlayerEnforcementSnapshot {
+  const restrictions = player.restrictions ?? [];
+
   if (!player.isSelfExcluded) {
-    return player;
+    return {
+      restrictions,
+      isSelfExcluded: false,
+      selfExclusionUntil: player.selfExclusionUntil ?? null,
+    };
   }
   if (player.selfExclusionUntil === null || player.selfExclusionUntil === undefined) {
-    return player;
+    return {
+      restrictions,
+      isSelfExcluded: true,
+      selfExclusionUntil: null,
+    };
   }
   if (Date.now() <= player.selfExclusionUntil) {
-    return player;
+    return {
+      restrictions,
+      isSelfExcluded: true,
+      selfExclusionUntil: player.selfExclusionUntil,
+    };
   }
 
   return {
-    ...player,
+    restrictions,
     isSelfExcluded: false,
     selfExclusionUntil: null,
-    restriction: player.restriction === "Full Account Block" ? null : player.restriction,
   };
 }
 
-function effectiveRestrictionList(player: EnforcementPlayer): RestrictionType[] {
-  if (player.restrictions && player.restrictions.length > 0) {
-    return player.restrictions;
-  }
-  return player.restriction ? [player.restriction] : [];
-}
-
 export function canUserPerformAction(
-  player: EnforcementPlayer | null | undefined,
+  player: EnforcementCheckInput | null | undefined,
   action: ActionType
 ) {
-  const checkedPlayer = player ? checkSelfExclusionExpiry(player) : null;
-  if (checkedPlayer?.isSelfExcluded) return false;
+  warnIfSingularRestrictionWithoutArray(player ?? undefined);
 
-  const list = checkedPlayer ? effectiveRestrictionList(checkedPlayer) : [];
+  const snap = player ? checkSelfExclusionExpiry(player) : null;
+  if (!snap) return true;
+  if (snap.isSelfExcluded) return false;
 
-  if (list.includes("Full Account Block")) return false;
-  if (list.includes("Deposit Block") && action === "deposit") return false;
-  if (list.includes("Withdrawal Block") && action === "withdrawal") return false;
-  if (
-    list.includes("Casino Block") &&
-    (action === "casino" || action === "sports")
-  ) {
-    return false;
-  }
-
-  return true;
+  if (action === "deposit") return playerCanDeposit(snap);
+  if (action === "withdrawal") return playerCanWithdraw(snap);
+  return playerCanPlayCasino(snap);
 }
-

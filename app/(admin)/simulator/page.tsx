@@ -12,7 +12,6 @@ import {
   useKycCases,
   VerificationType,
 } from "@/app/components/kyc-cases-context";
-import { canUserPerformAction } from "@/app/components/enforcement";
 import { runRiskEngine } from "@/app/components/rules-engine";
 import {
   SelfExclusionDuration,
@@ -66,6 +65,26 @@ type BulkSimulationResult = {
   fraudFlags: string[];
 };
 
+const KNOWN_RESTRICTIONS: RestrictionType[] = [
+  "Withdrawal Block",
+  "Deposit Block",
+  "Casino Block",
+  "Full Account Block",
+];
+
+function restrictionsFromAggregatedDisplay(value: string): RestrictionType[] {
+  if (!value || value === "None") return [];
+  const allowed = new Set<string>(KNOWN_RESTRICTIONS);
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s): s is RestrictionType => allowed.has(s))
+    )
+  );
+}
+
 const initialResult: SimulationResult = {
   triggeredAction: "No action triggered yet",
   triggeredRules: [],
@@ -91,6 +110,9 @@ export default function SimulatorPage() {
     applyTriggerToPlayer,
     applySelfExclusion,
     clearExpiredSelfExclusion,
+    canDeposit,
+    canWithdraw,
+    canPlayCasino,
     getPlayerById,
     resetPlayers,
   } = usePlayers();
@@ -228,9 +250,14 @@ export default function SimulatorPage() {
     const resolvedKycLevel = engineResult.finalDecision.kycLevel;
     const resolvedRestriction = engineResult.finalDecision.restriction;
     const finalVerifications = resolvedVerification as VerificationType[];
-    const finalRestrictions: RestrictionType[] = resolvedRestriction
-      ? [resolvedRestriction as RestrictionType]
-      : [];
+    const aggregatedFromEngine = engineResult.aggregatedActions
+      .restrictions as RestrictionType[];
+    const finalRestrictions: RestrictionType[] =
+      aggregatedFromEngine.length > 0
+        ? aggregatedFromEngine
+        : resolvedRestriction
+          ? [resolvedRestriction as RestrictionType]
+          : [];
 
     const triggerResult = applyTriggerToPlayer({
       id: normalizedUserId,
@@ -327,29 +354,34 @@ export default function SimulatorPage() {
 
   const tryAction = (action: "deposit" | "withdrawal" | "casino") => {
     const latestPlayer = activePlayerId ? clearExpiredSelfExclusion(activePlayerId) : undefined;
-    const restriction =
-      activePlayerId && latestPlayer
-        ? latestPlayer.restriction
-        : result.activeRestriction !== "None"
-          ? (result.activeRestriction as RestrictionType)
-          : null;
-    const allowed = canUserPerformAction(
-      {
-        restriction,
-        isSelfExcluded: latestPlayer?.isSelfExcluded ?? false,
-        selfExclusionUntil: latestPlayer?.selfExclusionUntil ?? null,
-      },
-      action
-    );
+    const restrictionsList =
+      latestPlayer?.restrictions?.length && latestPlayer.restrictions.length > 0
+        ? latestPlayer.restrictions
+        : restrictionsFromAggregatedDisplay(result.aggregatedRestrictions);
+    const enforcementSnapshot = {
+      restrictions: restrictionsList,
+      isSelfExcluded: latestPlayer?.isSelfExcluded ?? false,
+      selfExclusionUntil: latestPlayer?.selfExclusionUntil ?? null,
+    };
+    const allowed =
+      action === "deposit"
+        ? canDeposit(enforcementSnapshot)
+        : action === "withdrawal"
+          ? canWithdraw(enforcementSnapshot)
+          : canPlayCasino(enforcementSnapshot);
+    const blockDetail =
+      restrictionsList.length > 0 ? restrictionsList.join(", ") : "restriction";
     setActionCheckResult(
       allowed
         ? "Allowed"
-        : `Blocked due to ${restriction ?? "restriction"}`
+        : `Blocked due to ${blockDetail}`
     );
     if (activePlayerId && latestPlayer) {
       setResult((currentResult) => ({
         ...currentResult,
-        activeRestriction: latestPlayer.restriction ?? "None",
+        activeRestriction: latestPlayer.restrictions.length
+          ? latestPlayer.restrictions.join(", ")
+          : latestPlayer.restriction ?? "None",
         selfExclusionStatus: latestPlayer.isSelfExcluded ? "Active" : "Expired",
         selfExclusionReason: latestPlayer.selfExclusionReason || "None",
         selfExclusionUntil:
