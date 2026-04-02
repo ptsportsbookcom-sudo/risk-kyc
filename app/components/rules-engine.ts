@@ -316,7 +316,11 @@ export function resolveDecision(input: {
     input.riskScore >= 80
       ? uniqueRestrictions.includes("Full Account Block")
         ? ["Full Account Block"]
-        : ["Withdrawal Block", "Deposit Block", "Casino Block"]
+        : [
+            "Withdrawal Block",
+            "Deposit Block",
+            ...(uniqueRestrictions.includes("Casino Block") ? ["Casino Block"] : []),
+          ]
       : input.riskScore >= 60
         ? ["Withdrawal Block"]
         : [];
@@ -337,9 +341,9 @@ export function resolveDecision(input: {
 
   const restrictionPriority = [
     "Full Account Block",
-    "Casino Block",
-    "Deposit Block",
     "Withdrawal Block",
+    "Deposit Block",
+    "Casino Block",
   ];
   const finalRestriction =
     restrictionPriority.find((r) => finalRestrictions.includes(r)) ??
