@@ -51,6 +51,7 @@ export type KycCase = {
   selfExclusionUntil?: string | null;
   triggeredRules?: Array<{ id: string; name: string; priority: number }>;
   fraudFlags?: string[];
+  /** Case Risk Score — engine output at case creation (event-level; not accumulated player risk). */
   riskScore?: number;
   finalDecision?: {
     verification: string[];
@@ -80,6 +81,7 @@ type CreateKycCaseInput = {
   selfExclusionUntil?: string | null;
   triggeredRules?: Array<{ id: string; name: string; priority: number }>;
   fraudFlags?: string[];
+  /** Case Risk Score from engine for this event (not player rolling risk). */
   riskScore?: number;
   finalDecision?: {
     verification: string[];
@@ -266,6 +268,7 @@ export function KycCasesProvider({ children }: { children: ReactNode }) {
         selfExclusionUntil: input.selfExclusionUntil,
         triggeredRules: input.triggeredRules ?? [],
         fraudFlags: input.fraudFlags ?? [],
+        // Case Risk Score — engine result for this event only (not accumulated player risk).
         riskScore: input.riskScore ?? 0,
         finalDecision: input.finalDecision,
         restrictions: input.restrictions,

@@ -43,6 +43,7 @@ export type Player = {
   lastBetTimestamp: number;
   betCountLastMinute: number;
   bonusesUsed: number;
+  /** Player Risk Score — accumulated / rolling score updated when triggers apply (not the same as case `riskScore`). */
   riskScore: number;
   riskHistory: number[];
   lastRiskUpdate: number;
@@ -326,6 +327,7 @@ export function PlayersProvider({ children }: { children: ReactNode }) {
 
     const nextKyc = maxKycLevel([currentKyc, lifecycleKyc, riskBasedKyc]);
 
+    // Player rolling risk: blend incoming engine score with prior player state (Case Risk is stored separately on cases).
     const previousRisk = current.riskScore || 0;
     const newRisk = input.incomingRiskScore || 0;
     const finalRisk = Math.min(

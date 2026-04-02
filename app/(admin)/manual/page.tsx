@@ -7,6 +7,7 @@ import {
 } from "@/app/components/kyc-cases-context";
 import { runRiskEngine } from "@/app/components/rules-engine";
 import { usePlayers } from "@/app/components/players-context";
+import { getRiskLabel } from "@/app/components/risk-score-labels";
 import { RestrictionType, useRules } from "@/app/components/rules-context";
 
 const verificationOptions: VerificationType[] = [
@@ -159,6 +160,7 @@ export default function ManualTriggerPage() {
       verificationRequired: finalVerifications,
       restrictions: finalRestrictions,
       flags: finalFlags,
+      // Engine Case Risk Score for this run (feeds player rolling blend only; stored separately on case).
       incomingRiskScore: result.riskScore,
       recommendedKyc: result.finalDecision.kycLevel,
       playerSnapshot: {
@@ -185,6 +187,7 @@ export default function ManualTriggerPage() {
       flags: finalFlags,
       triggeredRules: [...(result.triggeredRules || [])],
       fraudFlags: [...fraudFlags],
+      // Case Risk Score — engine output for this event (not accumulated player risk).
       riskScore: result.riskScore,
       finalDecision: result.finalDecision,
       source: "manual",
@@ -461,8 +464,8 @@ export default function ManualTriggerPage() {
               }
             />
             <PreviewItem
-              label="Risk Score"
-              value={String(manualResult.riskScore)}
+              label="Case Risk Score (engine, event)"
+              value={`${manualResult.riskScore} (${getRiskLabel(manualResult.riskScore)})`}
             />
             <PreviewItem
               label="Recommended KYC (engine)"

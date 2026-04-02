@@ -96,13 +96,17 @@ export default function DashboardPage() {
             </p>
           </article>
           <article className="rounded-lg border border-slate-200 bg-white p-3">
-            <p className="text-xs font-semibold text-slate-600">High Risk Users</p>
+            <p className="text-xs font-semibold text-slate-600">
+              High Risk Users (by case risk)
+            </p>
             <p className="mt-1 text-xl font-semibold text-slate-900">
               {metrics.highRiskUsers.toLocaleString()}
             </p>
           </article>
           <article className="rounded-lg border border-slate-200 bg-white p-3">
-            <p className="text-xs font-semibold text-slate-600">Critical Users</p>
+            <p className="text-xs font-semibold text-slate-600">
+              Critical Users (by case risk)
+            </p>
             <p className="mt-1 text-xl font-semibold text-slate-900">
               {metrics.criticalUsers.toLocaleString()}
             </p>
@@ -157,7 +161,9 @@ export default function DashboardPage() {
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-slate-900">Risk Distribution</p>
             <p className="mt-1 text-xs text-slate-500">
-              Segment counts by `riskScore`: Low (0–39), Medium (40–59), High (60–79), Critical (80–100)
+              By <span className="font-medium text-slate-600">Case Risk Score</span> on each case
+              (engine at case creation): Low (0–39), Medium (40–59), High (60–79), Critical (80+).
+              Player rolling risk is not used here.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

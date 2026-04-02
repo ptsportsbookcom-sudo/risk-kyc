@@ -18,6 +18,7 @@ import {
   usePlayers,
 } from "@/app/components/players-context";
 import { getKycLevel } from "@/app/components/kyc-levels";
+import { getRiskLabel } from "@/app/components/risk-score-labels";
 import { EventType, RestrictionType, useRules } from "@/app/components/rules-context";
 
 type SimulationResult = {
@@ -39,6 +40,10 @@ type SimulationResult = {
   selfExclusionStatus: string;
   selfExclusionReason: string;
   selfExclusionUntil: string;
+  /** Formatted Case Risk Score (engine) from last manual simulation run. */
+  caseRiskScore: string;
+  /** Formatted Player Risk Score after last run’s applyTrigger (if any). */
+  playerRiskScore: string;
 };
 
 type BulkScenario = {
@@ -106,6 +111,8 @@ const initialResult: SimulationResult = {
   selfExclusionStatus: "Not active",
   selfExclusionReason: "None",
   selfExclusionUntil: "N/A",
+  caseRiskScore: "",
+  playerRiskScore: "",
 };
 
 export default function SimulatorPage() {
@@ -247,6 +254,8 @@ export default function SimulatorPage() {
         selfExclusionStatus: "Not active",
         selfExclusionReason: "None",
         selfExclusionUntil: "N/A",
+        caseRiskScore: `${engineResult.riskScore} (${getRiskLabel(engineResult.riskScore)})`,
+        playerRiskScore: "",
       });
       setActionCheckResult("");
       return;
@@ -303,6 +312,7 @@ export default function SimulatorPage() {
         flags: engineResult.finalDecision.flags,
         triggeredRules: engineResult.triggeredRules,
         fraudFlags: engineResult.detectedFraudSignals,
+        // Case Risk Score — engine output for this event (not player rolling risk).
         riskScore: engineResult.riskScore,
         finalDecision: engineResult.finalDecision,
         source: "simulation",
@@ -357,6 +367,8 @@ export default function SimulatorPage() {
       selfExclusionStatus: "Not active",
       selfExclusionReason: "None",
       selfExclusionUntil: "N/A",
+      caseRiskScore: `${engineResult.riskScore} (${getRiskLabel(engineResult.riskScore)})`,
+      playerRiskScore: `${triggerResult.player.riskScore} (${getRiskLabel(triggerResult.player.riskScore)})`,
     });
     setActionCheckResult("");
   };
@@ -399,6 +411,7 @@ export default function SimulatorPage() {
               ? "Permanent"
               : "N/A"
             : new Date(latestPlayer.selfExclusionUntil).toLocaleString(),
+        playerRiskScore: `${latestPlayer.riskScore} (${getRiskLabel(latestPlayer.riskScore)})`,
       }));
     }
   };
@@ -434,6 +447,7 @@ export default function SimulatorPage() {
           : new Date(updatedPlayer.selfExclusionUntil).toISOString(),
       triggeredRules: [],
       fraudFlags: [],
+      // Case Risk Score N/A — self-exclusion flow does not run the engine for this case row.
       riskScore: 0,
     });
     addAuditLog({
@@ -559,6 +573,7 @@ export default function SimulatorPage() {
         flags: resultItem.finalDecision.flags,
         triggeredRules: resultItem.triggeredRules,
         fraudFlags: resultItem.fraudFlags,
+        // Case Risk Score — engine output for this bulk scenario event (not player rolling risk).
         riskScore: resultItem.finalDecision.riskScore ?? 0,
         finalDecision: resultItem.finalDecision,
         source: "simulation",
@@ -969,10 +984,7 @@ export default function SimulatorPage() {
             {bulkResults.map((item) => (
               (() => {
                 const score = item.finalDecision?.riskScore ?? 0;
-                let riskLabel = "Low";
-                if (score >= 80) riskLabel = "Critical";
-                else if (score >= 60) riskLabel = "High";
-                else if (score >= 40) riskLabel = "Medium";
+                const riskLabel = getRiskLabel(score);
                 const riskColor =
                   score >= 80
                     ? "text-red-600"
@@ -1034,11 +1046,11 @@ export default function SimulatorPage() {
                   Recommended KYC (engine): {item.finalDecision.kycLevel}
                 </p>
                 <p className={`mt-1 text-sm font-semibold ${riskColor}`}>
-                  Risk Score: {score} ({riskLabel})
+                  Case Risk Score (engine): {score} ({riskLabel})
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Risk Score is calculated based on triggered rules and fraud signals. Higher
-                  score indicates higher fraud risk.
+                  Event-level score from the engine for this scenario. Player rolling risk is
+                  separate and not shown in bulk results.
                 </p>
                 <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
                   <li>Fraud Signals: {item.fraudFlags?.join(", ") || "None"}</li>
@@ -1207,6 +1219,14 @@ export default function SimulatorPage() {
             />
             <ResultItem label="Restriction" value={result.finalRestriction} />
             <ResultItem label="Flags" value={result.finalFlags} />
+            <ResultItem
+              label="Case Risk Score (engine, event)"
+              value={result.caseRiskScore || "—"}
+            />
+            <ResultItem
+              label="Player Risk Score (rolling, after trigger)"
+              value={result.playerRiskScore || "—"}
+            />
           </div>
         </div>
       </section>

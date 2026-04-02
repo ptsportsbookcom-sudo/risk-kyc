@@ -9,6 +9,7 @@ import {
   VerificationType,
 } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+import { getRiskLabel } from "@/app/components/risk-score-labels";
 
 function statusClass(status: ReviewStatus) {
   if (status === "Approved") {
@@ -125,6 +126,22 @@ export default function CaseDetailsPage() {
             }
           />
           <InfoItem label="Created date" value={selectedCase.createdDate} />
+          <InfoItem
+            label="Case Risk Score (engine, event)"
+            value={
+              typeof selectedCase.riskScore === "number"
+                ? `${selectedCase.riskScore} (${getRiskLabel(selectedCase.riskScore)})`
+                : "—"
+            }
+          />
+          <InfoItem
+            label="Player Risk Score (rolling)"
+            value={
+              player
+                ? `${player.riskScore} (${getRiskLabel(player.riskScore)})`
+                : "—"
+            }
+          />
         </div>
       </section>
 

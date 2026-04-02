@@ -14,6 +14,7 @@ import {
 import { handleRiskEvent, RiskEventType } from "@/app/components/risk-events";
 import { RestrictionType } from "@/app/components/rules-context";
 import { useRules } from "@/app/components/rules-context";
+import { getRiskLabel } from "@/app/components/risk-score-labels";
 
 type PlayerAction = "Deposit" | "Withdraw" | "Play Casino";
 
@@ -234,6 +235,15 @@ export default function PlayerActionsPage() {
               </span>
             </p>
           ) : null}
+          <p>
+            Player Risk (rolling):{" "}
+            <span className="font-semibold text-slate-900">
+              {player?.riskScore ?? 0} ({getRiskLabel(player?.riskScore ?? 0)})
+            </span>
+          </p>
+          <p className="text-[11px] text-slate-500">
+            Case Risk Score is on the KYC case (engine at event time), not shown here.
+          </p>
           <p>
             Max deposit:{" "}
             <span className="font-semibold text-slate-900">

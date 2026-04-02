@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useKycCases } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+import { getRiskLabel } from "@/app/components/risk-score-labels";
 
 function toSourceLabel(source: "manual" | "simulation" | "self-exclusion" | undefined) {
   if (source === "manual") return "manual";
@@ -118,6 +119,22 @@ export default function CaseManagementDetailPage() {
             value={decisionFlags.length > 0 ? decisionFlags.join(", ") : "None"}
           />
           <InfoItem label="Source" value={toSourceLabel(selectedCase.source)} />
+          <InfoItem
+            label="Case Risk Score (engine, event)"
+            value={
+              typeof selectedCase.riskScore === "number"
+                ? `${selectedCase.riskScore} (${getRiskLabel(selectedCase.riskScore)})`
+                : "—"
+            }
+          />
+          <InfoItem
+            label="Player Risk Score (rolling)"
+            value={
+              player
+                ? `${player.riskScore} (${getRiskLabel(player.riskScore)})`
+                : "—"
+            }
+          />
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button

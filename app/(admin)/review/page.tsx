@@ -9,6 +9,10 @@ import {
   VerificationType,
 } from "@/app/components/kyc-cases-context";
 import { usePlayers } from "@/app/components/players-context";
+import {
+  getRiskLabel,
+  type RiskScoreLabel,
+} from "@/app/components/risk-score-labels";
 
 type KycCaseWithRisk = KycCase & { riskScore?: number };
 
@@ -43,16 +47,7 @@ function getRiskColorClass(score: number) {
   return "text-green-600";
 }
 
-type RiskLevel = "Low" | "Medium" | "High" | "Critical";
-
-function getRiskLevel(score: number): RiskLevel {
-  if (score >= 80) return "Critical";
-  if (score >= 60) return "High";
-  if (score >= 40) return "Medium";
-  return "Low";
-}
-
-function getRiskBadgeClass(level: RiskLevel) {
+function getRiskBadgeClass(level: RiskScoreLabel) {
   if (level === "Critical")
     return "bg-red-50 text-red-700 ring-1 ring-red-200";
   if (level === "High") return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
@@ -70,7 +65,7 @@ export default function ReviewPage() {
     "All" | VerificationType
   >("All");
   const [usernameQuery, setUsernameQuery] = useState("");
-  const [riskLevelFilter, setRiskLevelFilter] = useState<"All" | RiskLevel>(
+  const [riskLevelFilter, setRiskLevelFilter] = useState<"All" | RiskScoreLabel>(
     "All"
   );
   const [fraudSignalFilter, setFraudSignalFilter] = useState<string>("All");
@@ -107,7 +102,7 @@ export default function ReviewPage() {
             row.userId.toLowerCase().includes(query);
 
       const score = typeof row.riskScore === "number" ? row.riskScore : 0;
-      const rowRiskLevel = getRiskLevel(score);
+      const rowRiskLevel = getRiskLabel(score);
       const matchesRiskLevel =
         riskLevelFilter === "All" ? true : rowRiskLevel === riskLevelFilter;
 
@@ -141,8 +136,10 @@ export default function ReviewPage() {
           Review and process identity verification requests.
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Risk Score is calculated based on triggered rules and fraud signals. Higher score
-          indicates higher fraud risk.
+          <span className="font-medium text-slate-600">Case Risk Score</span> (in the Risk column)
+          is the engine output for that case creation event.{" "}
+          <span className="font-medium text-slate-600">Player Risk Score</span> is the rolling score
+          on the player profile when shown — they are not merged.
         </p>
       </div>
 
@@ -214,13 +211,13 @@ export default function ReviewPage() {
             htmlFor="riskLevelFilter"
             className="text-sm font-medium text-slate-700"
           >
-            Risk Level
+            Case risk band
           </label>
           <select
             id="riskLevelFilter"
             value={riskLevelFilter}
             onChange={(event) =>
-              setRiskLevelFilter(event.target.value as "All" | RiskLevel)
+              setRiskLevelFilter(event.target.value as "All" | RiskScoreLabel)
             }
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
           >
@@ -282,7 +279,7 @@ export default function ReviewPage() {
                   Restrictions
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Risk
+                  Risk (case / player)
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Actions
@@ -301,7 +298,7 @@ export default function ReviewPage() {
                 const displayRiskScore =
                   typeof c.riskScore === "number" ? c.riskScore : 0;
                 const riskColorClass = getRiskColorClass(displayRiskScore);
-                const riskLevel = getRiskLevel(displayRiskScore);
+                const caseRiskBand = getRiskLabel(displayRiskScore);
                 const ui = caseUiActions[row.id] ?? {
                   escalated: false,
                   falsePositive: false,
@@ -391,18 +388,26 @@ export default function ReviewPage() {
                     className="px-4 py-3 text-sm text-slate-700 align-top"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className={`flex items-center gap-2 font-semibold ${riskColorClass}`}>
-                      Risk Score: {displayRiskScore}
+                    <p className={`flex flex-wrap items-center gap-2 font-semibold ${riskColorClass}`}>
+                      Case Risk: {displayRiskScore}
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getRiskBadgeClass(
-                          riskLevel
+                          caseRiskBand
                         )}`}
                       >
-                        {riskLevel}
+                        {caseRiskBand}
                       </span>
                     </p>
+                    {player ? (
+                      <p className="mt-1 text-xs font-medium text-slate-700">
+                        Player Risk: {player.riskScore}{" "}
+                        <span className="text-slate-500">
+                          ({getRiskLabel(player.riskScore)})
+                        </span>
+                      </p>
+                    ) : null}
                     <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Risk Score Explanation
+                      Case Risk explanation
                     </p>
                     <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
                       <li>
@@ -413,7 +418,7 @@ export default function ReviewPage() {
                       </li>
                     </ul>
                     <p className="mt-2 text-[11px] leading-snug text-slate-500">
-                      Risk Score = Rules × 15 + Fraud Signals × 20 (max 100)
+                      Case Risk Score = Rules × 15 + Fraud Signals × 20 (max 100), from engine at case creation.
                     </p>
                     <p className="mt-3 text-xs font-semibold text-slate-600">
                       Fraud Signals:
@@ -528,7 +533,7 @@ export default function ReviewPage() {
             const displayRiskScore =
               typeof c.riskScore === "number" ? c.riskScore : 0;
             const riskColorClass = getRiskColorClass(displayRiskScore);
-            const riskLevel = getRiskLevel(displayRiskScore);
+            const caseRiskBand = getRiskLabel(displayRiskScore);
             const ui = caseUiActions[row.id] ?? {
               escalated: false,
               falsePositive: false,
@@ -554,18 +559,23 @@ export default function ReviewPage() {
                   className="space-y-1 border-t border-slate-200 pt-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className={`flex items-center gap-2 text-sm font-semibold ${riskColorClass}`}>
-                    Risk Score: {displayRiskScore}
+                  <p className={`flex flex-wrap items-center gap-2 text-sm font-semibold ${riskColorClass}`}>
+                    Case Risk: {displayRiskScore}
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getRiskBadgeClass(
-                        riskLevel
+                        caseRiskBand
                       )}`}
                     >
-                      {riskLevel}
+                      {caseRiskBand}
                     </span>
                   </p>
+                  {player ? (
+                    <p className="text-xs font-medium text-slate-700">
+                      Player Risk: {player.riskScore} ({getRiskLabel(player.riskScore)})
+                    </p>
+                  ) : null}
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Risk Score Explanation
+                    Case Risk explanation
                   </p>
                   <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
                     <li>
@@ -576,7 +586,7 @@ export default function ReviewPage() {
                     </li>
                   </ul>
                   <p className="text-[11px] leading-snug text-slate-500">
-                    Risk Score = Rules × 15 + Fraud Signals × 20 (max 100)
+                    Case Risk = Rules × 15 + Fraud Signals × 20 (max 100), engine at case creation.
                   </p>
                   <p className="text-xs font-semibold text-slate-600">Fraud Signals:</p>
                   <p className="text-xs text-slate-600">
