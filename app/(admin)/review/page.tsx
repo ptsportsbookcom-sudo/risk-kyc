@@ -43,6 +43,24 @@ function getRiskColorClass(score: number) {
   return "text-green-600";
 }
 
+type RiskLevel = "Low" | "Medium" | "High" | "Critical";
+
+function getRiskLevel(score: number): RiskLevel {
+  if (score >= 80) return "Critical";
+  if (score >= 60) return "High";
+  if (score >= 40) return "Medium";
+  return "Low";
+}
+
+function getRiskBadgeClass(level: RiskLevel) {
+  if (level === "Critical")
+    return "bg-red-50 text-red-700 ring-1 ring-red-200";
+  if (level === "High") return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
+  if (level === "Medium")
+    return "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200";
+  return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+}
+
 export default function ReviewPage() {
   const router = useRouter();
   const { cases, updateCaseStatus } = useKycCases();
@@ -52,6 +70,22 @@ export default function ReviewPage() {
     "All" | VerificationType
   >("All");
   const [usernameQuery, setUsernameQuery] = useState("");
+  const [riskLevelFilter, setRiskLevelFilter] = useState<"All" | RiskLevel>(
+    "All"
+  );
+  const [fraudSignalFilter, setFraudSignalFilter] = useState<string>("All");
+
+  const [caseUiActions, setCaseUiActions] = useState<
+    Record<string, { escalated: boolean; falsePositive: boolean }>
+  >({});
+
+  const allFraudSignals = useMemo(() => {
+    const set = new Set<string>();
+    cases.forEach((c) => {
+      (c.fraudFlags ?? []).forEach((f) => set.add(f));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [cases]);
 
   const filteredRows = useMemo(() => {
     return cases.filter((row) => {
@@ -68,9 +102,39 @@ export default function ReviewPage() {
         .toLowerCase()
         .includes(usernameQuery.toLowerCase().trim());
 
-      return matchesStatus && matchesVerification && matchesUsername;
+      const query = usernameQuery.toLowerCase().trim();
+      const matchesSearch =
+        query.length === 0
+          ? true
+          : row.username.toLowerCase().includes(query) ||
+            row.userId.toLowerCase().includes(query);
+
+      const score = typeof row.riskScore === "number" ? row.riskScore : 0;
+      const rowRiskLevel = getRiskLevel(score);
+      const matchesRiskLevel =
+        riskLevelFilter === "All" ? true : rowRiskLevel === riskLevelFilter;
+
+      const matchesFraudSignal =
+        fraudSignalFilter === "All"
+          ? true
+          : (row.fraudFlags ?? []).includes(fraudSignalFilter);
+
+      return (
+        matchesStatus &&
+        matchesVerification &&
+        matchesSearch &&
+        matchesRiskLevel &&
+        matchesFraudSignal
+      );
     });
-  }, [cases, statusFilter, verificationFilter, usernameQuery]);
+  }, [
+    cases,
+    statusFilter,
+    verificationFilter,
+    usernameQuery,
+    riskLevelFilter,
+    fraudSignalFilter,
+  ]);
 
   return (
     <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -136,7 +200,7 @@ export default function ReviewPage() {
             htmlFor="usernameSearch"
             className="text-sm font-medium text-slate-700"
           >
-            Search Username
+            Search User ID / Username
           </label>
           <input
             id="usernameSearch"
@@ -146,6 +210,51 @@ export default function ReviewPage() {
             placeholder="e.g. alex"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
           />
+        </div>
+
+        <div className="space-y-1">
+          <label
+            htmlFor="riskLevelFilter"
+            className="text-sm font-medium text-slate-700"
+          >
+            Risk Level
+          </label>
+          <select
+            id="riskLevelFilter"
+            value={riskLevelFilter}
+            onChange={(event) =>
+              setRiskLevelFilter(event.target.value as "All" | RiskLevel)
+            }
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+          >
+            <option value="All">All levels</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label
+            htmlFor="fraudSignalFilter"
+            className="text-sm font-medium text-slate-700"
+          >
+            Fraud Signal
+          </label>
+          <select
+            id="fraudSignalFilter"
+            value={fraudSignalFilter}
+            onChange={(event) => setFraudSignalFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 focus:ring-2"
+          >
+            <option value="All">All signals</option>
+            {allFraudSignals.map((signal) => (
+              <option key={signal} value={signal}>
+                {signal}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -195,6 +304,11 @@ export default function ReviewPage() {
                 const displayRiskScore =
                   typeof c.riskScore === "number" ? c.riskScore : 0;
                 const riskColorClass = getRiskColorClass(displayRiskScore);
+                const riskLevel = getRiskLevel(displayRiskScore);
+                const ui = caseUiActions[row.id] ?? {
+                  escalated: false,
+                  falsePositive: false,
+                };
                 return (
                 <tr
                   key={row.id}
@@ -268,11 +382,18 @@ export default function ReviewPage() {
                     className="px-4 py-3 text-sm text-slate-700 align-top"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className={`font-semibold ${riskColorClass}`}>
+                    <p className={`flex items-center gap-2 font-semibold ${riskColorClass}`}>
                       Risk Score: {displayRiskScore}
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getRiskBadgeClass(
+                          riskLevel
+                        )}`}
+                      >
+                        {riskLevel}
+                      </span>
                     </p>
                     <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Breakdown
+                      Risk Score Explanation
                     </p>
                     <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
                       <li>
@@ -303,6 +424,9 @@ export default function ReviewPage() {
                     </p>
                   </td>
                   <td className="px-4 py-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Decision
+                    </p>
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
@@ -327,6 +451,53 @@ export default function ReviewPage() {
                         Reject
                       </button>
                     </div>
+
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCaseUiActions((current) => ({
+                            ...current,
+                            [row.id]: { ...ui, escalated: true, falsePositive: ui.falsePositive },
+                          }));
+                        }}
+                        disabled={ui.escalated || ui.falsePositive}
+                        className="min-h-11 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Escalate ${row.username}`}
+                      >
+                        Escalate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCaseUiActions((current) => ({
+                            ...current,
+                            [row.id]: { ...ui, falsePositive: true, escalated: ui.escalated },
+                          }));
+                        }}
+                        disabled={ui.falsePositive || ui.escalated}
+                        className="min-h-11 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Mark false positive ${row.username}`}
+                      >
+                        Mark as False Positive
+                      </button>
+                    </div>
+
+                    {(ui.escalated || ui.falsePositive) ? (
+                      <div className="mt-2 flex justify-end">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
+                            ui.escalated
+                              ? "bg-amber-50 text-amber-800 ring-amber-200"
+                              : "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                          }`}
+                        >
+                          {ui.escalated ? "Escalated" : "False Positive"}
+                        </span>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
                 );
@@ -348,6 +519,11 @@ export default function ReviewPage() {
             const displayRiskScore =
               typeof c.riskScore === "number" ? c.riskScore : 0;
             const riskColorClass = getRiskColorClass(displayRiskScore);
+            const riskLevel = getRiskLevel(displayRiskScore);
+            const ui = caseUiActions[row.id] ?? {
+              escalated: false,
+              falsePositive: false,
+            };
             return (
               <article
                 key={row.id}
@@ -361,11 +537,18 @@ export default function ReviewPage() {
                   className="space-y-1 border-t border-slate-200 pt-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className={`text-sm font-semibold ${riskColorClass}`}>
+                  <p className={`flex items-center gap-2 text-sm font-semibold ${riskColorClass}`}>
                     Risk Score: {displayRiskScore}
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getRiskBadgeClass(
+                        riskLevel
+                      )}`}
+                    >
+                      {riskLevel}
+                    </span>
                   </p>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Breakdown
+                    Risk Score Explanation
                   </p>
                   <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-600">
                     <li>
@@ -391,21 +574,76 @@ export default function ReviewPage() {
                 </div>
                 <p className="text-sm text-slate-700">Flags: {flags}</p>
                 <p className="text-sm text-slate-700">Restriction: {resolvedRestriction}</p>
+
+                <div
+                  className="space-y-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Decision
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCaseUiActions((current) => ({
+                          ...current,
+                          [row.id]: {
+                            ...ui,
+                            escalated: true,
+                            falsePositive: ui.falsePositive,
+                          },
+                        }));
+                      }}
+                      disabled={ui.escalated || ui.falsePositive}
+                      className="min-h-9 rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Escalate ${row.username}`}
+                    >
+                      Escalate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCaseUiActions((current) => ({
+                          ...current,
+                          [row.id]: {
+                            ...ui,
+                            falsePositive: true,
+                            escalated: ui.escalated,
+                          },
+                        }));
+                      }}
+                      disabled={ui.falsePositive || ui.escalated}
+                      className="min-h-9 rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Mark false positive ${row.username}`}
+                    >
+                      False Positive
+                    </button>
+                  </div>
+                  {(ui.escalated || ui.falsePositive) ? (
+                    <div className="flex justify-end">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
+                          ui.escalated
+                            ? "bg-amber-50 text-amber-800 ring-amber-200"
+                            : "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                        }`}
+                      >
+                        {ui.escalated ? "Escalated" : "False Positive"}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               </article>
             );
           })}
         </div>
 
-        {cases.length === 0 ? (
+        {cases.length === 0 || filteredRows.length === 0 ? (
           <div className="border-t border-slate-200 px-4 py-10 text-center">
-            <p className="text-sm font-medium text-slate-700">No KYC cases yet</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Run a simulation to create the first pending case.
-            </p>
-          </div>
-        ) : filteredRows.length === 0 ? (
-          <div className="border-t border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-            No cases match the selected filters.
+            <p className="text-sm font-medium text-slate-700">No cases found</p>
           </div>
         ) : null}
       </div>

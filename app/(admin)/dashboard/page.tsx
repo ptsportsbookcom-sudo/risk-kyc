@@ -7,6 +7,7 @@ export default function DashboardPage() {
   const { cases } = useKycCases();
   const metrics = useMemo(() => {
     const totalCases = cases.length;
+    const totalUsers = new Set(cases.map((c) => c.userId)).size;
     const pendingCases = cases.filter((c) => c.status === "Pending").length;
     const approvedCases = cases.filter((c) => c.status === "Approved").length;
     const rejectedCases = cases.filter((c) => c.status === "Rejected").length;
@@ -17,6 +18,9 @@ export default function DashboardPage() {
       High: 0,
       Critical: 0,
     } as Record<"Low" | "Medium" | "High" | "Critical", number>;
+
+    const highRiskUsersSet = new Set<string>();
+    const criticalUsersSet = new Set<string>();
 
     const signalCounts = new Map<string, number>();
     const ruleCounts = new Map<string, number>();
@@ -32,6 +36,9 @@ export default function DashboardPage() {
       else if (score >= 60) riskBuckets.High += 1;
       else if (score >= 40) riskBuckets.Medium += 1;
       else riskBuckets.Low += 1;
+
+      if (score >= 60) highRiskUsersSet.add(c.userId);
+      if (score >= 80) criticalUsersSet.add(c.userId);
 
       (c.fraudFlags ?? []).forEach((signal) => {
         signalCounts.set(signal, (signalCounts.get(signal) ?? 0) + 1);
@@ -55,9 +62,12 @@ export default function DashboardPage() {
 
     return {
       totalCases,
+      totalUsers,
       pendingCases,
       approvedCases,
       rejectedCases,
+      highRiskUsers: highRiskUsersSet.size,
+      criticalUsers: criticalUsersSet.size,
       riskBuckets,
       topFraudSignals,
       topTriggeredRules,
@@ -76,6 +86,35 @@ export default function DashboardPage() {
           <p className="text-xs text-slate-500">Last updated: {lastUpdated}</p>
         </div>
       </div>
+
+      {showEmptyState ? null : (
+        <div className="grid gap-3 sm:grid-cols-4">
+          <article className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-600">Total Users</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {metrics.totalUsers.toLocaleString()}
+            </p>
+          </article>
+          <article className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-600">High Risk Users</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {metrics.highRiskUsers.toLocaleString()}
+            </p>
+          </article>
+          <article className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-600">Critical Users</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {metrics.criticalUsers.toLocaleString()}
+            </p>
+          </article>
+          <article className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-600">Pending Cases</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {metrics.pendingCases.toLocaleString()}
+            </p>
+          </article>
+        </div>
+      )}
 
       {showEmptyState ? (
         <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
